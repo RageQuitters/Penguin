@@ -4,7 +4,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import hamming_loss, f1_score
-import joblib  # for saving the trained model
+import joblib
+
+from constants import *
 
 def train_fault_model(df, test_size=0.2, random_state=42, n_estimators=200):
     """
@@ -33,16 +35,8 @@ def train_fault_model(df, test_size=0.2, random_state=42, n_estimators=200):
     # -----------------------------
     # 2. Features and target
     # -----------------------------
-    feature_cols = ["Air temperature [K]",
-                    "Process temperature [K]",
-                    "Rotational speed [rpm]",
-                    "Torque [Nm]",
-                    "Tool wear [min]"]
-
-    label_cols = ["TWF","HDF","PWF","OSF","RNF"]
-
-    X = df[feature_cols]
-    y = df[label_cols]
+    X = df[FEATURE_LABELS]
+    y = df[FAULT_LABELS]
 
     # -----------------------------
     # 3. Train-test split
