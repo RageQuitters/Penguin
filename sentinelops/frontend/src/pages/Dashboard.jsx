@@ -348,7 +348,7 @@ function Header({ clock, wsConnected }) {
         </div>
         <span style={{
           fontFamily: 'var(--mono)',
-          fontSize: 13,
+          fontSize: 11,
           color: 'white',
           letterSpacing: '0.05em',
         }}>
