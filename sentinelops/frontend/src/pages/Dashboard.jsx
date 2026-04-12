@@ -14,6 +14,7 @@ import WorkOrderPanel from '../components/WorkOrderPanel';
 import { fetchMachines, analyzeReading } from '../services/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 
+
 // Default sensor readings per machine (seeded for demo)
 function seedReading(machineId) {
   const seeds = {
@@ -128,7 +129,7 @@ export default function Dashboard() {
             justifyContent: 'space-between',
             flexShrink: 0,
           }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               MACHINES
             </span>
             <span style={{
@@ -173,7 +174,7 @@ export default function Dashboard() {
               borderRadius: 6,
               fontFamily: 'var(--mono)',
               fontSize: 11,
-              color: 'var(--danger)',
+              color: 'white',
             }}>
               ⚠ {error}
             </div>
@@ -182,10 +183,10 @@ export default function Dashboard() {
           {/* Section label + analyze button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
                 JURONG PLANT A · {selectedId}
               </div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'white' }}>
                 {selectedMachine?.machine_type ?? '—'}
               </div>
             </div>
@@ -238,13 +239,13 @@ export default function Dashboard() {
           {baseline.length > 0 && <AnomalyChart baseline={baseline} />}
 
           {/* Live sensor readings */}
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
             LIVE SENSORS
           </div>
           <SensorGrid reading={reading} />
 
           {/* Fault classification */}
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
             FAULT CLASSIFICATION
           </div>
           <FaultGrid activeFaults={activeFaults} />
@@ -333,7 +334,7 @@ function Header({ clock, wsConnected }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          fontFamily: 'var(--mono)', fontSize: 10,
+          fontFamily: 'var(--mono)', fontSize: 11,
           color: 'var(--text2)',
           border: '1px solid var(--border2)',
           borderRadius: 20, padding: '3px 10px',
@@ -347,13 +348,13 @@ function Header({ clock, wsConnected }) {
         </div>
         <span style={{
           fontFamily: 'var(--mono)',
-          fontSize: 10,
-          color: 'var(--text3)',
+          fontSize: 13,
+          color: 'white',
           letterSpacing: '0.05em',
         }}>
           Jurong Plant A
         </span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'white' }}>
           {clock}
         </span>
       </div>

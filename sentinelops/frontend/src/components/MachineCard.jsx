@@ -48,7 +48,7 @@ export default function MachineCard({ machine, active, onClick }) {
       </div>
 
       {/* Machine type */}
-      <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6 }}>{machine_type}</div>
+      <div style={{ fontSize: 11, color: 'white', marginBottom: 6 }}>{machine_type}</div>
 
       {/* Anomaly score bar */}
       <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', marginBottom: 5 }}>
@@ -67,7 +67,7 @@ export default function MachineCard({ machine, active, onClick }) {
           score <span style={{ color: meta.color }}>{anomaly_score.toFixed(3)}</span>
         </span>
         {rul_hours != null && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white' }}>
             RUL {rul_hours.toFixed(1)}h
           </span>
         )}
