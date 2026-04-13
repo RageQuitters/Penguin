@@ -183,10 +183,10 @@ export default function Dashboard() {
           {/* Section label + analyze button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
                 JURONG PLANT A · {selectedId}
               </div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'grey' }}>
                 {selectedMachine?.machine_type ?? '—'}
               </div>
             </div>
@@ -239,13 +239,13 @@ export default function Dashboard() {
           {baseline.length > 0 && <AnomalyChart baseline={baseline} />}
 
           {/* Live sensor readings */}
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
             LIVE SENSORS
           </div>
           <SensorGrid reading={reading} />
 
           {/* Fault classification */}
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>
             FAULT CLASSIFICATION
           </div>
           <FaultGrid activeFaults={activeFaults} />
@@ -258,7 +258,7 @@ export default function Dashboard() {
 
         {/* ── RIGHT: AI Agent chat + trace tabs ── */}
         <div style={{
-          width: 340,
+          width: 380,
           borderLeft: '1px solid var(--border)',
           flexShrink: 0,
           overflow: 'hidden',
@@ -323,8 +323,8 @@ function Header({ clock, wsConnected }) {
         <span style={{
           fontFamily: 'var(--mono)',
           fontSize: 9,
-          color: 'var(--text3)',
-          border: '1px solid var(--border2)',
+          color: 'white',
+          border: '1px solid var(--text3)',
           borderRadius: 3,
           padding: '1px 6px',
           marginLeft: 4,
@@ -352,12 +352,12 @@ function Header({ clock, wsConnected }) {
         <span style={{
           fontFamily: 'var(--mono)',
           fontSize: 10,
-          color: 'var(--text3)',
+          color: 'white',
           letterSpacing: '0.05em',
         }}>
           Jurong Plant A
         </span>
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'white' }}>
           {clock}
         </span>
       </div>

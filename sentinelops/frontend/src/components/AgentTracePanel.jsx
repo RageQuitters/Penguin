@@ -126,12 +126,12 @@ export default function AgentTracePanel({ entries, connected, onClear }) {
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             AI AGENT TRACE
           </span>
           <span style={{
             fontFamily: 'var(--mono)',
-            fontSize: 9,
+            fontSize: 10,
             padding: '1px 6px',
             borderRadius: 10,
             border: `1px solid ${connected ? 'var(--accent)' : 'var(--danger)'}`,
@@ -182,7 +182,7 @@ export default function AgentTracePanel({ entries, connected, onClear }) {
         {Object.entries(AGENT_COLORS).map(([name, meta]) => (
           <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: meta.color }} />
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)' }}>{meta.short}</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'white' }}>{meta.short}</span>
           </div>
         ))}
       </div>
@@ -195,7 +195,7 @@ export default function AgentTracePanel({ entries, connected, onClear }) {
             textAlign: 'center',
             fontFamily: 'var(--mono)',
             fontSize: 11,
-            color: 'var(--text3)',
+            color: 'white',
           }}>
             <div style={{ marginBottom: 8, fontSize: 20 }}>◈</div>
             Awaiting analysis run.<br />

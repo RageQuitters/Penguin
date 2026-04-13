@@ -177,6 +177,14 @@ export default function SentinelChat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // Auto-resize textarea to fit content (clamped between 36px and 100px)
+  useEffect(() => {
+    const ta = inputRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.max(36, Math.min(ta.scrollHeight, 100))}px`;
+  }, [input]);
+
   const send = useCallback(async (text) => {
     const content = (text || input).trim();
     if (!content || loading) return;
@@ -222,7 +230,7 @@ export default function SentinelChat() {
         flexShrink: 0,
         background: 'var(--bg3)',
       }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '0.08em', marginBottom: 6 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'white', letterSpacing: '0.08em', marginBottom: 6 }}>
           LIVE SENSORS
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -234,7 +242,7 @@ export default function SentinelChat() {
             { label: 'Tool wear', value: '187 min', color: 'var(--danger)' },
           ].map(s => (
             <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--text3)' }}>{s.label}</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'grey' }}>{s.label}</span>
               <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: s.color, fontWeight: 500 }}>{s.value}</span>
             </div>
           ))}
@@ -276,7 +284,7 @@ export default function SentinelChat() {
         flexShrink: 0,
         background: 'var(--bg3)',
       }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '0.08em', marginBottom: 6 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'grey', letterSpacing: '0.08em', marginBottom: 6 }}>
           QUICK QUERIES
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -353,7 +361,6 @@ export default function SentinelChat() {
             resize: 'none',
             outline: 'none',
             lineHeight: 1.5,
-            minHeight: 36,
             maxHeight: 100,
             overflowY: 'auto',
             transition: 'border-color 0.15s',
