@@ -75,6 +75,15 @@ class Settings(BaseSettings):
     smsmsg_app_secret: str = os.getenv("SMSMSG_APP_SECRET", "")
 
     # -----------------------------------------------------------------------
+    # OpenRouter (OpenAI-compatible) — used by the SentinelOps chat agent
+    # snake_case field names so openai_client can read settings.openai_api_key
+    # pydantic-settings is case-insensitive on env var matching, so these
+    # still pick up OPENAI_API_KEY and OPENAI_MODEL from .env
+    # -----------------------------------------------------------------------
+    openai_api_key: str = ""
+    openai_model: str = "openai/gpt-oss-120b:free"
+
+    # -----------------------------------------------------------------------
     # Local model paths (fallback when ModelArts endpoints not configured)
     # -----------------------------------------------------------------------
     urgency_model_path: str = "joblib_files/urgency_model.joblib"
@@ -93,6 +102,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # don't crash on unknown env vars
 
 
 @lru_cache()

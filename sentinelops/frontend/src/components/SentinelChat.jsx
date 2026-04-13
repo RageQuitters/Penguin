@@ -170,6 +170,7 @@ export default function SentinelChat() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [quickQueriesOpen, setQuickQueriesOpen] = useState(true);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -276,42 +277,76 @@ export default function SentinelChat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick queries */}
+      {/* Quick queries — collapsible */}
       <div style={{
-        padding: '8px 12px',
         borderTop: '1px solid var(--border)',
         borderBottom: '1px solid var(--border)',
         flexShrink: 0,
         background: 'var(--bg3)',
       }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'grey', letterSpacing: '0.08em', marginBottom: 6 }}>
-          QUICK QUERIES
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {QUICK_QUERIES.map(q => (
-            <button
-              key={q.label}
-              onClick={() => send(q.query)}
-              disabled={loading}
-              style={{
-                textAlign: 'left',
-                fontFamily: 'var(--mono)',
-                fontSize: 10,
-                color: loading ? 'var(--text3)' : 'var(--text2)',
-                background: 'none',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: '4px 8px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.1s',
-              }}
-              onMouseEnter={e => { if (!loading) { e.target.style.borderColor = 'var(--accent)'; e.target.style.color = 'var(--accent)'; } }}
-              onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = loading ? 'var(--text3)' : 'var(--text2)'; }}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
+        {/* Header — clickable to toggle */}
+        <button
+          onClick={() => setQuickQueriesOpen(o => !o)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 12px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'var(--mono)',
+            fontSize: 9,
+            color: 'grey',
+            letterSpacing: '0.08em',
+          }}
+        >
+          <span>QUICK QUERIES</span>
+          <span style={{
+            fontSize: 10,
+            color: 'var(--accent)',
+            transition: 'transform 0.15s',
+            transform: quickQueriesOpen ? 'rotate(0deg)' : 'rotate(-180deg)',
+            display: 'inline-block',
+          }}>
+            ▼
+          </span>
+        </button>
+
+        {/* Buttons — only rendered when open */}
+        {quickQueriesOpen && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 3,
+            padding: '0 12px 8px',
+          }}>
+            {QUICK_QUERIES.map(q => (
+              <button
+                key={q.label}
+                onClick={() => send(q.query)}
+                disabled={loading}
+                style={{
+                  textAlign: 'left',
+                  fontFamily: 'var(--mono)',
+                  fontSize: 10,
+                  color: loading ? 'var(--text3)' : 'var(--text2)',
+                  background: 'none',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.1s',
+                }}
+                onMouseEnter={e => { if (!loading) { e.target.style.borderColor = 'var(--accent)'; e.target.style.color = 'var(--accent)'; } }}
+                onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = loading ? 'var(--text3)' : 'var(--text2)'; }}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Error */}
