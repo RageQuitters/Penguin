@@ -9,7 +9,7 @@ Multiple clients can connect simultaneously; all receive the same broadcast.
 import asyncio
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.core.trace import get_next_trace_entry
+from app.core.trace import _trace_queue
 
 ws_router = APIRouter()
 
@@ -32,13 +32,18 @@ async def trace_broadcaster() -> None:
     """
     Background task: continuously pulls from the trace queue and
     broadcasts to all connected WebSocket clients.
+    Uses get() with no timeout so each entry is broadcast the instant it's queued —
+    no artificial delay between entry generation and WS push.
     """
     while True:
-        entry = await get_next_trace_entry(timeout=0.05)
-        if entry:
+        try:
+            entry = await asyncio.wait_for(_trace_queue.get(), timeout=1.0)
             await broadcast(entry.model_dump_json())
-        else:
-            await asyncio.sleep(0.01)
+            _trace_queue.task_done()
+        except asyncio.TimeoutError:
+            pass  # nothing queued — loop and wait again
+        except asyncio.CancelledError:
+            break
 
 
 @ws_router.websocket("/ws")

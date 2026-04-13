@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.api.routes import router
 from app.api.websocket import ws_router, trace_broadcaster
+from app.api.chat import chat_router
 
 settings = get_settings()
 
@@ -46,6 +47,7 @@ app.add_middleware(
 
 # Mount routes
 app.include_router(router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
 app.include_router(ws_router)
 
 

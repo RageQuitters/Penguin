@@ -133,7 +133,70 @@ async def pangu_chat(
     return data["choices"][0]["message"]["content"].strip()
 
 
-async def _mock_pangu_response(prompt: str) -> str:
+async def _mock_chat_response(prompt: str) -> str:
+    """Mock SentinelOps chat replies for demo mode."""
+    p = prompt.lower()
+    if "which machine" in p or "send engineer" in p or "priority" in p or "triage" in p:
+        return (
+            "Based on live plant state, dispatch priority is:\n\n"
+            "**1. U-07 (CRITICAL)** — Tool wear at 187 min (threshold: 200), anomaly score 0.82. "
+            "TWF fault confirmed. RUL estimated at 4.2h. Send immediately.\n\n"
+            "**2. U-03 (WARNING)** — Process temp elevated at 309.8 K, rotational speed 1621 rpm. "
+            "Anomaly score 0.61. No confirmed faults yet but trajectory is deteriorating.\n\n"
+            "**3. U-11 (WARNING)** — Tool wear 155 min, torque 53.2 Nm. Monitor closely.\n\n"
+            "Recommend two-person team to U-07 now. Single technician to U-03 for inspection."
+        )
+    if "tool wear" in p or "twf" in p:
+        return (
+            "Tool Wear Failure (TWF) occurs when the tool insert exceeds its design lifetime. "
+            "At Jurong Plant A, the critical threshold is 200 minutes of tool wear. "
+            "U-07 is currently at 187 min — approximately 4–6 hours from failure at current usage rate. "
+            "Action: Replace tool insert TI-440-B. Parts confirmed in-stock at Stores Bay 3."
+        )
+    if "fault" in p or "hdf" in p or "pwf" in p or "osf" in p:
+        return (
+            "Active fault types across Jurong Plant A:\n"
+            "• **TWF** (Tool Wear Failure) — U-07: tool wear approaching critical threshold\n"
+            "• No HDF, PWF, OSF, or RNF faults currently active\n\n"
+            "To investigate a specific machine, run ANALYZE on that unit for a full agent pipeline report."
+        )
+    if "rul" in p or "remaining useful life" in p or "time to failure" in p:
+        return (
+            "Current RUL estimates (hours to predicted failure):\n"
+            "• U-07: ~4.2h — CRITICAL, immediate action required\n"
+            "• U-03: ~18.5h — elevated risk, schedule next maintenance window\n"
+            "• U-11: ~31h — monitor, within acceptable range\n"
+            "• All others: >72h — normal operating range\n\n"
+            "RUL is computed by the Predictive Maintenance Agent using degradation rate models trained on historical plant data."
+        )
+    if "maintenance" in p or "schedule" in p or "upcoming" in p:
+        return (
+            "Recommended maintenance schedule (next 24 hours):\n\n"
+            "**Immediate (0–4h):** U-07 — tool insert replacement (TWF fault active)\n"
+            "**This shift (4–8h):** U-03 — thermal inspection and RPM calibration check\n"
+            "**Next shift (8–16h):** U-11 — tool wear inspection, lubrication check\n"
+            "**Routine (>16h):** U-05, U-09 — scheduled preventive maintenance per SOP\n\n"
+            "All other units nominal — standard 72h monitoring interval applies."
+        )
+    if "handover" in p or "shift" in p or "report" in p:
+        return (
+            "**Shift Handover Report — Jurong Plant A**\n\n"
+            "Machines online: 12 | Critical: 1 | Warning: 2 | Normal: 9\n\n"
+            "Key events this shift:\n"
+            "• U-07: TWF fault detected at 14:32. Tool wear 187/200 min. Escalated to maintenance team.\n"
+            "• U-03: Anomaly score rose from 0.41 → 0.61. No fault confirmed yet. Keep under watch.\n"
+            "• U-11: Torque trending upward (53.2 Nm vs baseline 45 Nm). Advisory issued.\n\n"
+            "Incoming shift: Prioritise U-07 tool replacement. Review U-03 trend after 2 hours."
+        )
+    # Generic
+    return (
+        "SentinelOps is monitoring all 12 machines at Jurong Plant A. "
+        "Current alert: U-07 has a Tool Wear Failure fault active with 4.2h estimated RUL. "
+        "Ask me about specific machines, fault types, maintenance scheduling, or shift handover reports."
+    )
+
+
+
     """
     Returns a structured mock JSON response when Pangu is not configured.
     Inspects the prompt to return the right schema for each agent type.
@@ -203,6 +266,10 @@ async def _mock_pangu_response(prompt: str) -> str:
             "overall_urgency": "medium",
             "work_order": "SentinelOps Assessment: Elevated anomaly indicators detected. Review sensor trends over the next 4 hours. If tool wear continues to increase at the current rate, schedule tool insert replacement before the next shift. Parts TI-440-B are in stock. Assign to on-duty technician.",
         })
+
+    # Chat / conversational fallback
+    if "sentinelops:" in p or "conversation history" in p or "which machine" in p or "send engineers" in p:
+        return _mock_chat_response(prompt)
 
     # Generic fallback
     return json.dumps({"result": "Analysis complete.", "reasoning": "No specific pattern matched in mock mode."})

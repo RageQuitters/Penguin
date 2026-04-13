@@ -14,7 +14,23 @@ export async function fetchMachines() {
 }
 
 /**
- * POST /api/analyze — run the full multi-agent pipeline
+ * POST /api/chat — multi-turn AI agent chat with live plant context
+ * @param {Array<{role: string, content: string}>} messages
+ * @returns {Promise<{reply: string, agent: string}>}
+ */
+export async function sendChatMessage(messages) {
+  const res = await fetch(`${BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, plant_id: 'Jurong Plant A' }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Chat failed: ${res.status}`);
+  }
+  return res.json();
+}
+/*
  * @param {string} machineId
  * @param {{air_temperature, process_temperature, rotational_speed, torque, tool_wear}} reading
  */

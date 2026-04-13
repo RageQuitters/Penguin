@@ -37,13 +37,13 @@ export function SensorGrid({ reading }) {
             borderRadius: 8,
             padding: '12px',
           }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'white', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text3)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
               {label}
             </div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 500, color, marginBottom: 2 }}>
               {typeof val === 'number' ? (unit === 'rpm' ? Math.round(val) : val.toFixed(1)) : '--'}
             </div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'grey', marginBottom: 8 }}>{unit}</div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', marginBottom: 8 }}>{unit}</div>
             <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 0.5s' }} />
             </div>
@@ -210,9 +210,9 @@ export function KpiGrid({ anomalyScore, rul, activeFaults, status }) {
           padding: 14,
           animation: 'fadeSlideIn 0.3s ease both',
         }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'white', marginBottom: 6, letterSpacing: '0.05em' }}>{label}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)', marginBottom: 6, letterSpacing: '0.05em' }}>{label}</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 24, fontWeight: 500, lineHeight: 1, color }}>{val}</div>
-          <div style={{ fontSize: 11, color: 'grey', marginTop: 4 }}>{sub}</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{sub}</div>
         </div>
       ))}
     </div>
