@@ -73,6 +73,7 @@ def _build_plant_context() -> str:
                 f"tool_wear={m.get('tool_wear',0):.0f}min, "
                 f"RUL={rul_str}"
             )
+            print("\n".join(lines))
         return "\n".join(lines)
     except Exception:
         return "Plant state unavailable."
@@ -131,7 +132,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     reply = await pangu_chat(
         prompt=prompt,
         system=system,
-        max_tokens=100,
+        max_tokens=600,
         temperature=0.3,
     )
 
