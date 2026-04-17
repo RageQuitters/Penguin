@@ -1,228 +1,168 @@
-# SentinelOps
+# SentinelOps Dashboard
 
-**Smart Multi-Agent AI System for Industrial Plant Monitoring**
-Team Penguin · Huawei Cloud Challenge 2026
+A modern machine fleet monitoring dashboard with AI-powered analysis and real-time status tracking.
 
----
+## Features
 
-## Architecture
+- **Fleet Monitoring**: Real-time status tracking for 12 machines with color-coded health indicators
+- **AI Chat Assistant**: Interactive chat interface for querying fleet status and getting recommendations
+- **Comprehensive Analysis**: "Analyze All Machines" feature that generates fleet-wide summaries with engineer dispatch recommendations
+- **Machine Details**: Detailed sensor readings, health metrics, and remaining useful life (RUL) tracking
+- **Status Dashboard**: Quick overview of Normal, Warning, and Critical machines
 
-```
-L1  Real-time ingestion   IoT Device Access → DMS for Kafka → Cloud Stream Storage
-L2  Processing & storage  FunctionGraph → GaussDB → OBS
-L3  Multi-agent AI        Pangu LLM (Orchestrator) + ModelArts (ML inference)
-L4  Operator interfaces   FastAPI + React Dashboard + Telegram / SMSMSG alerts
-```
+## Tech Stack
 
-### Agent Flow
+- **Frontend**: React 19 + TypeScript
+- **UI Components**: Radix UI + shadcn/ui
+- **Styling**: Tailwind CSS 4
+- **Build Tool**: Vite
+- **Routing**: Wouter
+- **Charts**: Recharts
 
-```
-Sensor reading → Orchestrator (Pangu LLM)
-                     │
-                     ▼
-             Anomaly Detection Agent
-               ├─ run_isolation_forest()   [ModelArts / local joblib]
-               ├─ query_baseline()          [Cloud Stream Storage / GaussDB]
-               └─ get_machine_profile()    [GaussDB]
-                     │
-               score ≥ 0.4?  ──NO──▶ Monitor only. Stop.
-                     │YES
-                     ▼
-             Fault Classification Agent
-               ├─ run_fault_classifier()   [ModelArts / local joblib]
-               ├─ get_fault_history()      [GaussDB]
-               └─ get_maintenance_log()    [GaussDB]
-                     │
-           fault OR score ≥ 0.7?  ──NO──▶ Skip predictive.
-                     │YES
-                     ▼
-             Predictive Maintenance Agent
-               ├─ get_wear_trend()         [GaussDB]
-               ├─ estimate_rul()
-               └─ check_parts_inventory()
-                     │
-                     ▼
-             Orchestrator synthesises → Work Order (Pangu LLM)
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ 
+- pnpm (recommended) or npm
+
+### Installation
+
+1. Extract the ZIP file
+2. Install dependencies:
+
+```bash
+pnpm install
+# or
+npm install
 ```
 
----
+### Development
 
-## Folder Structure
+Start the development server:
+
+```bash
+pnpm dev
+# or
+npm run dev
+```
+
+The application will be available at `http://localhost:3000`
+
+### Build
+
+Create a production build:
+
+```bash
+pnpm build
+# or
+npm run build
+```
+
+## Project Structure
 
 ```
 sentinelops/
-├── backend/
-│   ├── app/
-│   │   ├── agents/
-│   │   │   ├── anomaly_agent.py       # Isolation Forest + Pangu LLM reasoning
-│   │   │   ├── fault_agent.py         # Random Forest + contextual Pangu reasoning
-│   │   │   └── predictive_agent.py    # RUL + parts + Pangu urgency decision
-│   │   ├── api/
-│   │   │   ├── routes.py              # POST /api/analyze, GET /api/machines
-│   │   │   └── websocket.py           # /ws real-time trace streaming
-│   │   ├── core/
-│   │   │   ├── config.py              # All Huawei Cloud env vars (pydantic-settings)
-│   │   │   ├── pangu_client.py        # Pangu LLM client (IAM + API key auth)
-│   │   │   └── trace.py              # Observability: TraceLog → async queue → WS
-│   │   ├── models/
-│   │   │   └── schemas.py             # All Pydantic schemas
-│   │   ├── orchestrator/
-│   │   │   └── orchestrator.py        # Conditional agent routing + synthesis
-│   │   ├── tools/
-│   │   │   ├── data_store.py          # Mock GaussDB / Cloud Stream Storage queries
-│   │   │   └── ml_inference.py        # Joblib model wrapper (→ ModelArts in prod)
-│   │   └── main.py                    # FastAPI app entry point
-│   ├── dataset/
-│   │   └── train_test.csv
-│   ├── joblib_files/
-│   │   ├── urgency_model.joblib       # Trained Isolation Forest
-│   │   └── fault_model.joblib         # Trained Random Forest (multi-label)
-│   ├── telegram/
-│   │   └── bot.py                     # Telegram alert bot
-│   ├── requirements.txt
-│   └── .env.example
-│
-└── frontend/
-    ├── public/
-    │   └── index.html
-    ├── src/
-    │   ├── components/
-    │   │   ├── MachineCard.jsx         # Color-coded machine status card
-    │   │   ├── AgentTracePanel.jsx     # Live agent reasoning timeline
-    │   │   ├── DashboardWidgets.jsx    # SensorGrid, FaultGrid, AnomalyChart, KpiGrid
-    │   │   ├── WorkOrderPanel.jsx      # Orchestrator decision + agent summaries
-    │   │   └── AnalyzeModal.jsx        # Custom sensor reading input
-    │   ├── hooks/
-    │   │   └── useWebSocket.js         # Auto-reconnect WS hook
-    │   ├── pages/
-    │   │   └── Dashboard.jsx           # Main 3-column layout
-    │   ├── services/
-    │   │   └── api.js                  # fetchMachines(), analyzeReading()
-    │   ├── App.jsx
-    │   ├── index.js
-    │   └── index.css                   # Dark terminal theme (IBM Plex Mono)
-    └── package.json
+├── client/
+│   ├── public/           # Static assets
+│   ├── src/
+│   │   ├── components/   # Reusable React components
+│   │   ├── contexts/     # React contexts
+│   │   ├── hooks/        # Custom React hooks
+│   │   ├── lib/          # Utility functions and fake data
+│   │   ├── pages/        # Page components
+│   │   ├── App.tsx       # Main app component
+│   │   ├── main.tsx      # React entry point
+│   │   └── index.css     # Global styles
+│   └── index.html        # HTML template
+├── server/               # Backend placeholder (not used in this version)
+├── shared/               # Shared types and constants
+├── package.json
+├── vite.config.ts
+└── tsconfig.json
 ```
 
----
+## Key Components
 
-## Setup
+### Dashboard (`client/src/pages/Dashboard.tsx`)
+Main application page with three-panel layout:
+- Left sidebar: Machine list with status indicators
+- Center: Machine details and analysis results
+- Right sidebar: AI chat assistant
 
-### 1. Backend
+### AIChat (`client/src/components/AIChat.tsx`)
+Interactive chat interface that responds to queries about:
+- Machine status
+- Critical alerts
+- Recommendations
+- Analysis requests
+
+### AllMachinesAnalysis (`client/src/components/AllMachinesAnalysis.tsx`)
+Comprehensive fleet analysis panel showing:
+- Fleet status summary
+- Engineers to dispatch
+- Recommended actions
+- Machine breakdown by status
+
+### Fake Data (`client/src/lib/fakeData.ts`)
+Provides:
+- 12 pre-seeded machines with realistic sensor data
+- Analysis functions
+- AI chat response generation
+
+## Usage
+
+### Viewing Machine Status
+1. Select a machine from the left sidebar
+2. View detailed sensor readings and health metrics in the center panel
+3. Check the RUL (Remaining Useful Life) progress bar
+
+### Analyzing All Machines
+1. Click the "Analyze All Machines" button in the top-right
+2. Wait for the analysis to complete (simulated 1.5s delay)
+3. Review the comprehensive fleet report with:
+   - Status breakdown (Normal/Warning/Critical)
+   - Engineers to dispatch with urgency levels
+   - Recommended maintenance actions
+   - Detailed machine information by status
+
+### Chatting with AI Assistant
+1. Type a question in the chat input box on the right
+2. Ask about:
+   - `"status"` - Get current fleet status
+   - `"critical"` - See critical machines
+   - `"recommend"` - Get maintenance recommendations
+   - `"analyze"` - Instructions for fleet analysis
+3. The AI responds with relevant information
+
+## Customization
+
+### Adding More Machines
+Edit `client/src/lib/fakeData.ts` and add entries to the `SEED_MACHINES` array.
+
+### Modifying Machine Data
+Update the sensor values and status in the `SEED_MACHINES` array to reflect your test scenarios.
+
+### Customizing AI Responses
+Edit the `generateAIChatResponse` function in `client/src/lib/fakeData.ts` to add new patterns or responses.
+
+### Styling
+- Global styles: `client/src/index.css`
+- Component styles: Use Tailwind CSS classes
+- Theme colors: Defined in CSS variables in `index.css`
+
+## Building for Production
 
 ```bash
-cd backend
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env — at minimum set PANGU_API_BASE + PANGU_API_KEY
-# Leave PANGU_API_BASE empty to run in mock mode (no cloud credentials needed)
-
-# Run
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+pnpm build
 ```
 
-Backend endpoints:
-- `GET  /health`           — health check
-- `GET  /api/machines`     — all machine states
-- `POST /api/analyze`      — run multi-agent analysis
-- `WS   /ws`               — real-time agent trace stream
+This creates an optimized build in the `dist/` directory ready for deployment.
 
-### 2. Frontend
+## License
 
-```bash
-cd frontend
-npm install
-npm start        # opens http://localhost:3000
-```
+MIT
 
-The React dev server proxies `/api/*` and `/ws` to `localhost:8000`.
+## Support
 
----
-
-## Huawei Cloud Configuration
-
-### Pangu LLM (L3 — Orchestrator)
-
-1. Deploy Pangu model via **ModelArts** → Dedicated Resource Pool
-2. Note the inference endpoint URL
-3. Set in `.env`:
-   ```
-   PANGU_API_BASE=https://infer-modelarts-ap-southeast-3.myhuaweicloud.com/modelarts/v1/infers/<id>
-   PANGU_API_KEY=<your_key>
-   PANGU_AUTH_MODE=apikey   # or "iam"
-   ```
-
-### ModelArts ML Inference (L3 — Anomaly + Fault models)
-
-1. Upload `joblib_files/*.joblib` to **OBS**
-2. Create inference services in **ModelArts**
-3. Set `MODELARTS_URGENCY_ENDPOINT` and `MODELARTS_FAULT_ENDPOINT` in `.env`
-4. Update `app/tools/ml_inference.py` — the functions have clear production swap comments
-
-### GaussDB (L2 — operational database)
-
-Replace mock functions in `app/tools/data_store.py` with real SQL queries:
-```python
-import asyncpg
-# Each function has a clear "Production swap:" comment
-```
-
-### DMS for Kafka (L1 — real-time ingestion)
-
-The system is designed for Kafka consumption. Add a Kafka consumer in `app/main.py`:
-```python
-# On new message in processed-readings topic → call run_orchestrator()
-```
-
----
-
-## Mock Mode
-
-When `PANGU_API_BASE` is not set, `pangu_client.py` returns realistic mock
-LLM responses based on the prompt content. The full agent pipeline still runs
-— Isolation Forest and Random Forest models score the readings, tools query
-the mock data store, and the trace system streams over WebSocket. Only the LLM
-reasoning step is simulated. This allows full local development without
-Huawei Cloud credentials.
-
----
-
-## Sensor Data Format
-
-```json
-{
-  "machine_id": "U-07",
-  "reading": {
-    "air_temperature": 298.1,
-    "process_temperature": 308.6,
-    "rotational_speed": 1543.0,
-    "torque": 42.8,
-    "tool_wear": 187.0
-  }
-}
-```
-
-### Example curl
-
-```bash
-curl -X POST http://localhost:8000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "machine_id": "U-07",
-    "reading": {
-      "air_temperature": 298.1,
-      "process_temperature": 308.6,
-      "rotational_speed": 1543.0,
-      "torque": 42.8,
-      "tool_wear": 187.0
-    }
-  }'
-```
+For issues or questions, refer to the component documentation in the source files.

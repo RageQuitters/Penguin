@@ -1,1 +1,0 @@
-# SentinelOps backend package
