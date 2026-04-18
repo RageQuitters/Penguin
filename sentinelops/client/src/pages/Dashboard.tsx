@@ -24,7 +24,42 @@ export default function Dashboard() {
   // Load machines on mount
   useEffect(() => {
     const loadMachines = async () => {
-      const data = await getAllMachines();
+      // Step 1: get machines from Firebase
+      let data = await getAllMachines();
+
+      // Step 2: enrich with real ML scores from your joblib models
+      try {
+        const res = await fetch('/api/predict-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ machines: data }),
+        });
+        if (res.ok) {
+          const { results } = await res.json();
+          data = data.map((m) => {
+            const ml = results.find((r: any) => r.machine_id === m.machine_id);
+            if (!ml) return m;
+            return {
+              ...m,
+              anomaly_score: ml.anomaly_score,
+              HDF: ml.failure_vector.HDF ?? m.HDF,
+              OSF: ml.failure_vector.OSF ?? m.OSF,
+              PWF: ml.failure_vector.PWF ?? m.PWF,
+              RNF: ml.failure_vector.RNF ?? m.RNF,
+              TWF: ml.failure_vector.TWF ?? m.TWF,
+              status: ml.decision === 'FAILURE' ? 'Critical'
+                    : ml.decision === 'WARNING'  ? 'Warning'
+                    : 'Normal',
+            };
+          });
+          console.log('[ML] machines enriched with real model scores ✅');
+        }
+      } catch (err) {
+        // ml_server.py not running — fall back to Firebase scores silently
+        console.warn('[ML] sidecar unavailable, using stored scores');
+      }
+
+      // Step 3: set state — AIChat will now receive real ML scores
       setMachines(data);
       setSelectedMachineId(data[0]?.machine_id || null);
       setLoading(false);
