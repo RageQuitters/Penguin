@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DeepSeek Server",
+      "type": "shell",
+      "command": "cd sentinelOps/server; npm install; npm run dev:server",
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "ML Server",
+      "type": "shell",
+      "command": "cd sentinelOps/server; python ml_server.py",
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Frontend",
+      "type": "shell",
+      "command": "cd sentinelOps; npm install; npm run dev",
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Run All",
+      "dependsOn": [
+        "DeepSeek Server",
+        "ML Server",
+        "Frontend"
+      ],
+      "dependsOrder": "parallel"
+    }
+  ]
+}
