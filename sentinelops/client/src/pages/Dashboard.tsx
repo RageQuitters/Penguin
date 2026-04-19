@@ -14,6 +14,7 @@ import AIChat from "@/components/AIChat";
 import AllMachinesAnalysisPanel from "@/components/AllMachinesAnalysis";
 import { getAllMachines, analyzeAllMachines } from "@/lib/fakeData";
 import type { Machine, AllMachinesAnalysis } from "@/lib/fakeData";
+import { updateMachineMLResults } from "@/lib/firebaseService";
 import logo from "@/public/logo.png";
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 
@@ -56,15 +57,33 @@ export default function Dashboard() {
               PWF: ml.failure_vector.PWF ?? m.PWF,
               RNF: ml.failure_vector.RNF ?? m.RNF,
               TWF: ml.failure_vector.TWF ?? m.TWF,
-              status:
-                ml.decision === "FAILURE"
-                  ? "Critical"
-                  : ml.decision === "WARNING"
-                    ? "Warning"
-                    : "Normal",
+              status: (() => {
+                const faults = [
+                  ml.failure_vector.HDF ?? m.HDF,
+                  ml.failure_vector.OSF ?? m.OSF,
+                  ml.failure_vector.PWF ?? m.PWF,
+                  ml.failure_vector.RNF ?? m.RNF,
+                  ml.failure_vector.TWF ?? m.TWF,
+                ];
+                if (faults.some((v) => v === 1)) return "Severe";
+                if (ml.anomaly_score > 0.6) return "Moderate";
+                return "Normal";
+              })(),
             };
           });
           console.log("[ML] machines enriched with real model scores ✅");
+
+          // Persist ML results back to Firebase so the database stays in sync.
+          // Fire-and-forget — don't block the UI on these writes.
+          results.forEach((ml: any) => {
+            updateMachineMLResults(ml.machine_id, {
+              anomaly_score: ml.anomaly_score,
+              failure_vector: ml.failure_vector,
+              decision: ml.decision,
+            }).catch((err) =>
+              console.warn(`[Firebase] write failed for ${ml.machine_id}:`, err)
+            );
+          });
         }
       } catch (err) {
         // ml_server.py not running — fall back to Firebase scores silently
@@ -113,12 +132,11 @@ export default function Dashboard() {
 
   /**
    * Machine colour logic:
-   *  - GREEN:         anomaly_score < 0.6  AND  no fault predicted
-   *  - YELLOW/ORANGE: anomaly_score >= 0.6  OR   any fault predicted  (but not BOTH)
-   *  - RED:           anomaly_score >= 0.6  AND  any fault predicted
+   *  - RED:    at least 1 predicted fault              → Severe
+   *  - YELLOW: anomaly_score > 0.6, no fault           → Moderate
+   *  - GREEN:  anomaly_score <= 0.6, no fault          → Normal
    */
   const getMachineColor = (machine: Machine) => {
-    const highAnomaly = machine.anomaly_score >= 0.6;
     const hasFault = [
       machine.HDF,
       machine.OSF,
@@ -131,14 +149,14 @@ export default function Dashboard() {
       return {
         card: "bg-red-50 border-red-300 dark:bg-red-950 dark:border-red-700",
         dot: "bg-red-500",
-        label: "Critical",
+        label: "Severe",
       };
     }
-    if (highAnomaly) {
+    if (machine.anomaly_score > 0.6) {
       return {
         card: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950 dark:border-yellow-700",
         dot: "bg-yellow-500",
-        label: "Warning",
+        label: "Moderate",
       };
     }
     return {
@@ -151,9 +169,9 @@ export default function Dashboard() {
   const getStatusIcon = (machine: Machine) => {
     const { label } = getMachineColor(machine);
     switch (label) {
-      case "Critical":
+      case "Severe":
         return <AlertTriangle className="h-4 w-4 text-red-600" />;
-      case "Warning":
+      case "Moderate":
         return <AlertCircle className="h-4 w-4 text-yellow-600" />;
       default:
         return <CheckCircle2 className="h-4 w-4 text-green-600" />;
@@ -171,15 +189,15 @@ export default function Dashboard() {
     return faults;
   };
 
-  // Fleet summary counts using the new colour logic
+  // Fleet summary counts using the correct classification logic
   const normalCount = machines.filter(
     (m) => getMachineColor(m).label === "Normal",
   ).length;
-  const warningCount = machines.filter(
-    (m) => getMachineColor(m).label === "Warning",
+  const moderateCount = machines.filter(
+    (m) => getMachineColor(m).label === "Moderate",
   ).length;
-  const criticalCount = machines.filter(
-    (m) => getMachineColor(m).label === "Critical",
+  const severeCount = machines.filter(
+    (m) => getMachineColor(m).label === "Severe",
   ).length;
 
   if (loading) {
@@ -283,15 +301,15 @@ export default function Dashboard() {
             </div>
             <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded text-center">
               <div className="font-bold text-yellow-600 dark:text-yellow-400">
-                {warningCount}
+                {moderateCount}
               </div>
-              <div className="text-muted-foreground">Warning</div>
+              <div className="text-muted-foreground">Moderate</div>
             </div>
             <div className="p-2 bg-red-50 dark:bg-red-950 rounded text-center">
               <div className="font-bold text-red-600 dark:text-red-400">
-                {criticalCount}
+                {severeCount}
               </div>
-              <div className="text-muted-foreground">Critical</div>
+              <div className="text-muted-foreground">Severe</div>
             </div>
           </div>
         </div>

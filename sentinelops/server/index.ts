@@ -89,6 +89,23 @@ async function callLLMJson(systemPrompt: string, userPrompt: string) {
 }
 
 // =========================================================================
+// CLASSIFICATION HELPER
+// Rules (in priority order):
+//   severe   — at least one fault predicted by the RF classifiers
+//   moderate — no faults, but anomaly score > 0.6
+//   normal   — neither of the above
+// =========================================================================
+
+function getClassification(
+  anomalyScore: number,
+  activeFaults: string[]
+): "severe" | "moderate" | "normal" {
+  if (activeFaults.length > 0) return "severe";
+  if (anomalyScore > 0.6)      return "moderate";
+  return "normal";
+}
+
+// =========================================================================
 // SUB-AGENTS
 // =========================================================================
 
@@ -97,10 +114,7 @@ async function anomalyAgent(machine: any) {
   const ml = await callMLPredict(machine);
 
   const score = ml.anomaly_score;
-  const classification =
-    score > 0.7 ? "severe" :
-    score > 0.4 ? "moderate" :
-                  "normal";
+  const classification = getClassification(score, ml.active_faults);
 
   return {
     anomaly_score:  score,
@@ -192,29 +206,29 @@ async function orchestrate(machine: any): Promise<OrchestratorResult> {
   let fault: Awaited<ReturnType<typeof faultAgent>> | undefined;
   let predictive: Awaited<ReturnType<typeof predictiveAgent>> | undefined;
 
-  // Step 2: score < 0.4 → monitor only, stop
-  if (anomaly.anomaly_score < 0.4) {
-    routing_log.push("Score below 0.4 → skip Fault & Predictive agents (monitor only).");
+  // Step 2: normal classification → monitor only, stop
+  if (anomaly.classification === "normal") {
+    routing_log.push("Classification normal → skip Fault & Predictive agents (monitor only).");
   } else {
-    // Step 3: score >= 0.4 → call Fault Classifier (ML)
+    // Step 3: moderate or severe → call Fault Classifier (ML)
     fault = await faultAgent(machine);
     agents_called.push("fault");
     routing_log.push(
-      `Score >= 0.4 → Fault Agent (RF) returned [${fault.active_faults.join(", ") || "none"}], severity=${fault.severity}.`
+      `Classification ${anomaly.classification} → Fault Agent (RF) returned [${fault.active_faults.join(", ") || "none"}], severity=${fault.severity}.`
     );
 
-    // Step 4: any fault OR score >= 0.7 → call Predictive Agent (DeepSeek)
-    const hasFault    = fault.active_faults.length > 0;
-    const highAnomaly = anomaly.anomaly_score >= 0.7;
+    // Step 4: any fault (severe) OR moderate score → call Predictive Agent (DeepSeek)
+    const hasFault   = fault.active_faults.length > 0;
+    const isModerate = anomaly.classification === "moderate";
 
-    if (hasFault || highAnomaly) {
+    if (hasFault || isModerate) {
       predictive = await predictiveAgent(machine);
       agents_called.push("predictive");
       routing_log.push(
-        `${hasFault ? "Fault detected" : "Score >= 0.7"} → Predictive Agent returned RUL=${predictive.rul_hours.toFixed(1)}h, urgency=${predictive.urgency}.`
+        `${hasFault ? "Fault detected (severe)" : "Moderate anomaly"} → Predictive Agent returned RUL=${predictive.rul_hours.toFixed(1)}h, urgency=${predictive.urgency}.`
       );
     } else {
-      routing_log.push("No faults and score < 0.7 → skip Predictive Agent.");
+      routing_log.push("No faults and classification not moderate → skip Predictive Agent.");
     }
   }
 
@@ -244,7 +258,7 @@ Synthesize sub-agent outputs into a final work order.
 RULES:
 1. overall_urgency = highest severity across all agents (low < medium < high < critical).
 2. If ANY agent indicates critical failure risk → urgency = "critical".
-3. If anomaly_score < 0.4 AND no active faults → urgency = "low", work_order = monitor only.
+3. If classification = "normal" (no active faults AND anomaly_score ≤ 0.6) → urgency = "low", work_order = monitor only.
 4. If RUL < 24h OR severe faults → urgency = "critical".
 5. Do not invent any new numbers.
 
@@ -281,11 +295,15 @@ const CHAT_SYSTEM_PROMPT = `
 You are SentinelOps AI for a machine-fleet monitoring dashboard.
 
 You help plant managers:
-- understand current machine status (Normal / Warning / Critical)
+- understand current machine status using the correct three-tier classification:
+    • Severe   — at least 1 predicted fault (HDF, OSF, PWF, RNF, or TWF = 1). Requires immediate engineer dispatch.
+    • Moderate — no predicted faults, but anomaly_score > 0.6. Monitor closely and schedule maintenance.
+    • Normal   — no predicted faults and anomaly_score ≤ 0.6. Operating within acceptable parameters.
 - explain anomaly scores, RUL, tool wear, and active faults (HDF, OSF, PWF, RNF, TWF)
 - recommend maintenance and dispatch actions
 
 Rules:
+- ALWAYS use the Severe / Moderate / Normal classification above. Never say "Warning" or "Critical" as a status label.
 - Base answers ONLY on the live machine data provided. Do not invent machines or readings.
 - Be concise. Use markdown with **bold** for machine_ids.
 - If the user asks to "orchestrate" or wants a work order for a specific machine,
@@ -407,7 +425,12 @@ async function startServer() {
               anomaly_score:  m.anomaly_score,
               failure_vector: { TWF: m.TWF, HDF: m.HDF, PWF: m.PWF, OSF: m.OSF, RNF: m.RNF },
               active_faults:  [],
-              decision:       m.status === 'Critical' ? 'FAILURE' : m.status === 'Warning' ? 'WARNING' : 'NORMAL',
+              decision: (() => {
+                const faults = [m.TWF, m.HDF, m.PWF, m.OSF, m.RNF];
+                if (faults.some((v) => v === 1)) return 'FAILURE';
+                if (m.anomaly_score > 0.6) return 'WARNING';
+                return 'NORMAL';
+              })(),
             };
           }
         })

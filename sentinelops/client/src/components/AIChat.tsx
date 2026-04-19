@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Loader2, ChevronDown, ChevronRight, Brain } from 'lucide-react';
 import { chat, type ChatHistoryItem } from '@/lib/api';
-import type { Machine } from '@/lib/fakeData';
+import type { Machine } from '@/lib/firebaseService';
 import { Streamdown } from 'streamdown';
 
 interface ChatMessage {
