@@ -8,7 +8,7 @@
  * The LLM API key is never exposed to the browser — it lives on the server.
  */
 
-import type { Machine } from './fakeData';
+import type { Machine } from './firebaseService';
 
 export interface ChatHistoryItem {
   role: 'user' | 'assistant';

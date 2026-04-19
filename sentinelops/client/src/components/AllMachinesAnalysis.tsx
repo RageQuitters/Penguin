@@ -44,28 +44,28 @@ export default function AllMachinesAnalysisPanel({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Warning
+              Moderate
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-yellow-500 dark:text-yellow-400">
               {analysis.warning_machines.length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">machines in warning state</p>
+            <p className="text-xs text-muted-foreground mt-1">machines with high anomaly score</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Critical
+              Severe
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-red-500 dark:text-red-400">
               {analysis.critical_machines.length}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">machines critical</p>
+            <p className="text-xs text-muted-foreground mt-1">machines with predicted fault</p>
           </CardContent>
         </Card>
       </div>
@@ -126,13 +126,13 @@ export default function AllMachinesAnalysisPanel({
         </CardContent>
       </Card>
 
-      {/* Critical Machines */}
+      {/* Severe Machines */}
       {analysis.critical_machines.length > 0 && (
         <Card className="border-red-200 dark:border-red-800">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-              Critical Machines
+              Severe Machines (Predicted Fault)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -156,13 +156,13 @@ export default function AllMachinesAnalysisPanel({
         </Card>
       )}
 
-      {/* Warning Machines */}
+      {/* Moderate Machines */}
       {analysis.warning_machines.length > 0 && (
         <Card className="border-yellow-200 dark:border-yellow-800">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-              Warning Machines
+              Moderate Machines (High Anomaly Score)
             </CardTitle>
           </CardHeader>
           <CardContent>

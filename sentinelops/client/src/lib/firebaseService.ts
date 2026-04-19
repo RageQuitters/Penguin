@@ -357,3 +357,52 @@ export async function updateMachine(machineId: string, updates: Partial<Machine>
     console.error('Error updating machine:', error);
   }
 }
+
+/**
+ * Persists the ML-computed anomaly score and fault flags back to Firestore.
+ * Called after /api/predict-all returns so that the dashboard, the AI chat,
+ * and any other client always read up-to-date values from the database.
+ *
+ * Fields written:
+ *   anomaly_score  — LOF model output (0–1)
+ *   TWF, HDF, PWF, OSF, RNF — Random Forest fault classifier flags (0 | 1)
+ *   status         — derived from decision string ("FAILURE" | "WARNING" | "NORMAL")
+ */
+export async function updateMachineMLResults(
+  machineId: string,
+  mlResult: {
+    anomaly_score: number;
+    failure_vector: { TWF: number; HDF: number; PWF: number; OSF: number; RNF: number };
+    decision: 'FAILURE' | 'WARNING' | 'NORMAL';
+  }
+): Promise<void> {
+  try {
+    const machinesRef = collection(db, 'machines');
+    const snapshot = await getDocs(query(machinesRef, where('machine_id', '==', machineId)));
+
+    if (!snapshot.empty) {
+      const docRef = snapshot.docs[0].ref;
+
+      const status: Machine['status'] =
+        mlResult.decision === 'FAILURE'
+          ? 'Critical'
+          : mlResult.decision === 'WARNING'
+          ? 'Warning'
+          : 'Normal';
+
+      await updateDoc(docRef, {
+        anomaly_score: mlResult.anomaly_score,
+        TWF: (mlResult.failure_vector.TWF as 0 | 1),
+        HDF: (mlResult.failure_vector.HDF as 0 | 1),
+        PWF: (mlResult.failure_vector.PWF as 0 | 1),
+        OSF: (mlResult.failure_vector.OSF as 0 | 1),
+        RNF: (mlResult.failure_vector.RNF as 0 | 1),
+        status,
+      });
+    }
+  } catch (error) {
+    console.error(`[Firebase] Error writing ML results for ${machineId}:`, error);
+    // Non-fatal — the in-memory state is already correct; the write will
+    // succeed on the next predict cycle.
+  }
+}
