@@ -5,8 +5,10 @@ import pandas as pd
 import uvicorn
 import os
 from pydantic import BaseModel
+from mangum import Mangum  # ✅ REQUIRED for Vercel
 
 app = FastAPI()
+handler = Mangum(app)
 
 # ── Load models once at startup ──────────────────────────────────────────────
 # Vercel will import this file and look for the FastAPI instance named `app`.
