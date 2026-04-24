@@ -33,27 +33,29 @@ async function callMLPredict(machine: any) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      air_temperature:     machine.air_temperature,
+      air_temperature: machine.air_temperature,
       process_temperature: machine.process_temperature,
-      rotational_speed:    machine.rotational_speed,
-      torque:              machine.torque,
-      tool_wear:           machine.tool_wear,
+      rotational_speed: machine.rotational_speed,
+      torque: machine.torque,
+      tool_wear: machine.tool_wear,
     }),
   });
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`ML sidecar ${res.status}: ${text}`);
   }
+
   return res.json() as Promise<{
-    anomaly_score:  number;
-    failure_vector: Record<string, number>;  // { TWF: 0, HDF: 1, ... }
-    active_faults:  string[];                // ["HDF"]
-    decision:       "NORMAL" | "WARNING" | "FAILURE";
+    anomaly_score: number;
+    failure_vector: Record<string, number>;
+    active_faults: string[];
+    decision: "NORMAL" | "WARNING" | "FAILURE";
   }>;
 }
 
 // =========================================================================
-// LLM helpers (still used by predictiveAgent + synthesizeWorkOrder)
+// LLM helpers
 // =========================================================================
 
 async function callLLM(body: Record<string, unknown>) {
@@ -65,6 +67,7 @@ async function callLLM(body: Record<string, unknown>) {
     },
     body: JSON.stringify(body),
   });
+
   if (!res.ok) throw new Error(`LLM ${res.status}: ${await res.text()}`);
   return res.json();
 }
@@ -80,7 +83,9 @@ async function callLLMJson(systemPrompt: string, userPrompt: string) {
       { role: "user", content: userPrompt },
     ],
   });
+
   const text = data?.choices?.[0]?.message?.content ?? "{}";
+
   try {
     return JSON.parse(text);
   } catch {
@@ -90,10 +95,6 @@ async function callLLMJson(systemPrompt: string, userPrompt: string) {
 
 // =========================================================================
 // CLASSIFICATION HELPER
-// Rules (in priority order):
-//   severe   — at least one fault predicted by the RF classifiers
-//   moderate — no faults, but anomaly score > 0.6
-//   normal   — neither of the above
 // =========================================================================
 
 function getClassification(
@@ -101,7 +102,7 @@ function getClassification(
   activeFaults: string[]
 ): "severe" | "moderate" | "normal" {
   if (activeFaults.length > 0) return "severe";
-  if (anomalyScore > 0.6)      return "moderate";
+  if (anomalyScore > 0.6) return "moderate";
   return "normal";
 }
 
@@ -109,7 +110,6 @@ function getClassification(
 // SUB-AGENTS
 // =========================================================================
 
-// ----- Agent 1: Anomaly  ← NOW ML-POWERED (LOF model) -------------------
 async function anomalyAgent(machine: any) {
   const ml = await callMLPredict(machine);
 
@@ -117,24 +117,24 @@ async function anomalyAgent(machine: any) {
   const classification = getClassification(score, ml.active_faults);
 
   return {
-    anomaly_score:  score,
+    anomaly_score: score,
     classification,
-    // decision mirrors your notebook's final_decision() thresholds
     reasoning: `LOF model: score=${score.toFixed(3)}, decision=${ml.decision}`,
   };
 }
 
-// ----- Agent 2: Fault Classifier  ← NOW ML-POWERED (RF models) ----------
 async function faultAgent(machine: any) {
   const ml = await callMLPredict(machine);
 
-  const active_faults = ml.active_faults;  // e.g. ["HDF", "TWF"]
-  const severity =
-    active_faults.length >= 3 ? "high"   :
-    active_faults.length >= 1 ? "medium" :
-                                "low";
+  const active_faults = ml.active_faults;
 
-  // Flag procurement if tool-wear-related faults are active
+  const severity =
+    active_faults.length >= 3
+      ? "high"
+      : active_faults.length >= 1
+      ? "medium"
+      : "low";
+
   const procurement_flag =
     active_faults.includes("TWF") || active_faults.includes("HDF");
 
@@ -142,13 +142,13 @@ async function faultAgent(machine: any) {
     active_faults,
     severity,
     procurement_flag,
-    reasoning: `RF classifiers predicted faults: [${active_faults.join(", ") || "none"}]. ` +
-               `Raw vector: TWF=${ml.failure_vector.TWF} HDF=${ml.failure_vector.HDF} ` +
-               `PWF=${ml.failure_vector.PWF} OSF=${ml.failure_vector.OSF} RNF=${ml.failure_vector.RNF}`,
+    reasoning:
+      `RF classifiers predicted faults: [${active_faults.join(", ") || "none"}]. ` +
+      `Raw vector: TWF=${ml.failure_vector.TWF} HDF=${ml.failure_vector.HDF} ` +
+      `PWF=${ml.failure_vector.PWF} OSF=${ml.failure_vector.OSF} RNF=${ml.failure_vector.RNF}`,
   };
 }
 
-// ----- Agent 3: Predictive Maintenance  ← DeepSeek (no RUL model yet) ---
 async function predictiveAgent(machine: any) {
   const system = `You are the Predictive Maintenance Agent.
 Estimate remaining useful life and degradation.
@@ -163,24 +163,26 @@ Return ONLY JSON:
 
   const user = `Machine data:
 ${JSON.stringify({
-  machine_id:    machine.machine_id,
-  tool_wear:     machine.tool_wear,
-  existing_rul:  machine.rul_hours,
+  machine_id: machine.machine_id,
+  tool_wear: machine.tool_wear,
+  existing_rul: machine.rul_hours,
   anomaly_score: machine.anomaly_score,
 })}`;
 
   const out = await callLLMJson(system, user);
+
   return {
-    rul_hours:        typeof out.rul_hours === "number" ? out.rul_hours : machine.rul_hours ?? 0,
+    rul_hours:
+      typeof out.rul_hours === "number" ? out.rul_hours : machine.rul_hours ?? 0,
     degradation_rate: out.degradation_rate ?? 0,
-    urgency:          out.urgency ?? "low",
+    urgency: out.urgency ?? "low",
     procurement_flag: !!out.procurement_flag,
-    reasoning:        out.reasoning ?? "No reasoning provided.",
+    reasoning: out.reasoning ?? "No reasoning provided.",
   };
 }
 
 // =========================================================================
-// ORCHESTRATOR — routing logic unchanged, agents now ML-backed
+// ORCHESTRATOR
 // =========================================================================
 
 interface OrchestratorResult {
@@ -198,59 +200,82 @@ async function orchestrate(machine: any): Promise<OrchestratorResult> {
   const agents_called: string[] = [];
   const routing_log: string[] = [];
 
-  // Step 1: ALWAYS call Anomaly Agent (ML)
   const anomaly = await anomalyAgent(machine);
   agents_called.push("anomaly");
-  routing_log.push(`Anomaly Agent (LOF) returned score=${anomaly.anomaly_score.toFixed(3)}, classification=${anomaly.classification}.`);
+
+  routing_log.push(
+    `Anomaly Agent (LOF) returned score=${anomaly.anomaly_score.toFixed(
+      3
+    )}, classification=${anomaly.classification}.`
+  );
 
   let fault: Awaited<ReturnType<typeof faultAgent>> | undefined;
   let predictive: Awaited<ReturnType<typeof predictiveAgent>> | undefined;
 
-  // Step 2: normal classification → monitor only, stop
   if (anomaly.classification === "normal") {
-    routing_log.push("Classification normal → skip Fault & Predictive agents (monitor only).");
+    routing_log.push(
+      "Classification normal → skip Fault & Predictive agents (monitor only)."
+    );
   } else {
-    // Step 3: moderate or severe → call Fault Classifier (ML)
     fault = await faultAgent(machine);
     agents_called.push("fault");
+
     routing_log.push(
-      `Classification ${anomaly.classification} → Fault Agent (RF) returned [${fault.active_faults.join(", ") || "none"}], severity=${fault.severity}.`
+      `Classification ${
+        anomaly.classification
+      } → Fault Agent (RF) returned [${
+        fault.active_faults.join(", ") || "none"
+      }], severity=${fault.severity}.`
     );
 
-    // Step 4: any fault (severe) OR moderate score → call Predictive Agent (DeepSeek)
-    const hasFault   = fault.active_faults.length > 0;
+    const hasFault = fault.active_faults.length > 0;
     const isModerate = anomaly.classification === "moderate";
 
     if (hasFault || isModerate) {
       predictive = await predictiveAgent(machine);
       agents_called.push("predictive");
+
       routing_log.push(
-        `${hasFault ? "Fault detected (severe)" : "Moderate anomaly"} → Predictive Agent returned RUL=${predictive.rul_hours.toFixed(1)}h, urgency=${predictive.urgency}.`
+        `${
+          hasFault ? "Fault detected (severe)" : "Moderate anomaly"
+        } → Predictive Agent returned RUL=${predictive.rul_hours.toFixed(
+          1
+        )}h, urgency=${predictive.urgency}.`
       );
     } else {
-      routing_log.push("No faults and classification not moderate → skip Predictive Agent.");
+      routing_log.push(
+        "No faults and classification not moderate → skip Predictive Agent."
+      );
     }
   }
 
-  // Step 5: Synthesize work order (DeepSeek)
   const synthesis = await synthesizeWorkOrder(machine, {
-    anomaly, fault, predictive,
+    anomaly,
+    fault,
+    predictive,
     routing_reason: routing_log.join(" "),
   });
 
   return {
     machine_id: machine.machine_id,
     agents_called,
-    anomaly, fault, predictive,
+    anomaly,
+    fault,
+    predictive,
     routing_reason: routing_log.join(" "),
-    work_order:      synthesis.work_order,
+    work_order: synthesis.work_order,
     overall_urgency: synthesis.overall_urgency,
   };
 }
 
 async function synthesizeWorkOrder(
   machine: any,
-  signals: { anomaly: any; fault?: any; predictive?: any; routing_reason: string }
+  signals: {
+    anomaly: any;
+    fault?: any;
+    predictive?: any;
+    routing_reason: string;
+  }
 ) {
   const system = `You are the SentinelOps Orchestrator.
 Synthesize sub-agent outputs into a final work order.
@@ -278,17 +303,27 @@ ROUTING DECISION LOG:
 ${signals.routing_reason}
 
 SUB-AGENT OUTPUTS:
-${JSON.stringify({ anomaly: signals.anomaly, fault: signals.fault ?? "not called", predictive: signals.predictive ?? "not called" }, null, 2)}`;
+${JSON.stringify(
+  {
+    anomaly: signals.anomaly,
+    fault: signals.fault ?? "not called",
+    predictive: signals.predictive ?? "not called",
+  },
+  null,
+  2
+)}`;
 
   const out = await callLLMJson(system, user);
+
   return {
     overall_urgency: out.overall_urgency ?? "medium",
-    work_order:      out.work_order ?? "Unable to generate decision. Manual inspection required.",
+    work_order:
+      out.work_order ?? "Unable to generate decision. Manual inspection required.",
   };
 }
 
 // =========================================================================
-// HTTP SERVER
+// HTTP SERVER / VERCEL WRAPPER
 // =========================================================================
 
 const CHAT_SYSTEM_PROMPT = `
@@ -299,7 +334,7 @@ You help plant managers:
     • Severe   — at least 1 predicted fault (HDF, OSF, PWF, RNF, or TWF = 1). Requires immediate engineer dispatch.
     • Moderate — no predicted faults, but anomaly_score > 0.6. Monitor closely and schedule maintenance.
     • Normal   — no predicted faults and anomaly_score ≤ 0.6. Operating within acceptable parameters.
-- explain anomaly scores, RUL, tool wear, and active faults (HDF, OSF, PWF, RNF, TWF)
+- explain anomaly scores, RUL, tool wear, and active faults (HDF, OSF, RNF, PWF, TWF)
 - recommend maintenance and dispatch actions
 
 Rules:
@@ -311,21 +346,27 @@ Rules:
   than this conversational endpoint.
 `.trim();
 
-async function startServer() {
+export function createApp() {
   const app = express();
-  const server = createServer(app);
+
   app.use(express.json({ limit: "2mb" }));
 
   // --- /api/chat — conversational Q&A ------------------------------------
   app.post("/api/chat", async (req, res) => {
     try {
       const { userMessage, machines, history = [] } = req.body ?? {};
+
       if (typeof userMessage !== "string" || !Array.isArray(machines)) {
         return res.status(400).json({ error: "Invalid body" });
       }
 
       const safeHistory = history
-        .filter((h: any) => h && (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
+        .filter(
+          (h: any) =>
+            h &&
+            (h.role === "user" || h.role === "assistant") &&
+            typeof h.content === "string"
+        )
         .map(({ role, content }: any) => ({ role, content }))
         .slice(-20);
 
@@ -334,17 +375,30 @@ async function startServer() {
         temperature: 0.3,
         max_tokens: 2048,
         messages: [
-          { role: "system", content: `${CHAT_SYSTEM_PROMPT}\n\nLive machine data (JSON):\n${JSON.stringify(machines)}` },
+          {
+            role: "system",
+            content: `${CHAT_SYSTEM_PROMPT}\n\nLive machine data (JSON):\n${JSON.stringify(
+              machines
+            )}`,
+          },
           ...safeHistory,
           { role: "user", content: userMessage },
         ],
       });
 
       const msg = data?.choices?.[0]?.message ?? {};
-      res.json({ reply: msg.content ?? "", reasoning: msg.reasoning_content ?? null, model: LLM_MODEL });
+
+      res.json({
+        reply: msg.content ?? "",
+        reasoning: msg.reasoning_content ?? null,
+        model: LLM_MODEL,
+      });
     } catch (err: any) {
       console.error("[/api/chat]", err?.message);
-      res.status(500).json({ error: "AI call failed", detail: err?.message });
+      res.status(500).json({
+        error: "AI call failed",
+        detail: err?.message,
+      });
     }
   });
 
@@ -352,16 +406,28 @@ async function startServer() {
   app.post("/api/orchestrate", async (req, res) => {
     try {
       const { machine } = req.body ?? {};
+
       if (!machine || !machine.machine_id) {
         return res.status(400).json({ error: "Missing machine" });
       }
+
       console.log(`[orchestrate] starting for ${machine.machine_id}`);
+
       const result = await orchestrate(machine);
-      console.log(`[orchestrate] ${machine.machine_id} → ${result.overall_urgency} (agents: ${result.agents_called.join(", ")})`);
+
+      console.log(
+        `[orchestrate] ${machine.machine_id} → ${
+          result.overall_urgency
+        } (agents: ${result.agents_called.join(", ")})`
+      );
+
       res.json(result);
     } catch (err: any) {
       console.error("[/api/orchestrate]", err?.message);
-      res.status(500).json({ error: "Orchestrate failed", detail: err?.message });
+      res.status(500).json({
+        error: "Orchestrate failed",
+        detail: err?.message,
+      });
     }
   });
 
@@ -369,34 +435,40 @@ async function startServer() {
   app.post("/api/orchestrate/fleet", async (req, res) => {
     try {
       const { machines } = req.body ?? {};
+
       if (!Array.isArray(machines)) {
         return res.status(400).json({ error: "machines must be an array" });
       }
+
       const results = await Promise.all(
         machines.map((m) =>
           orchestrate(m).catch((err) => ({
-            machine_id:      m.machine_id,
-            error:           err?.message,
-            agents_called:   [],
-            routing_reason:  "orchestration failed",
-            work_order:      "Error during orchestration — manual inspection required.",
+            machine_id: m.machine_id,
+            error: err?.message,
+            agents_called: [],
+            routing_reason: "orchestration failed",
+            work_order:
+              "Error during orchestration — manual inspection required.",
             overall_urgency: "medium" as const,
           }))
         )
       );
+
       res.json({ results });
     } catch (err: any) {
       console.error("[/api/orchestrate/fleet]", err?.message);
-      res.status(500).json({ error: "Fleet orchestrate failed", detail: err?.message });
+      res.status(500).json({
+        error: "Fleet orchestrate failed",
+        detail: err?.message,
+      });
     }
   });
 
   // --- /api/predict-all — run ML predict() for every machine at once ------
-  // Called by the frontend on page load to enrich all machines with real
-  // LOF anomaly scores + RF fault flags before the chat sees them.
   app.post("/api/predict-all", async (req, res) => {
     try {
       const { machines } = req.body ?? {};
+
       if (!Array.isArray(machines)) {
         return res.status(400).json({ error: "machines must be an array" });
       }
@@ -408,28 +480,41 @@ async function startServer() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                air_temperature:     m.air_temperature,
+                air_temperature: m.air_temperature,
                 process_temperature: m.process_temperature,
-                rotational_speed:    m.rotational_speed,
-                torque:              m.torque,
-                tool_wear:           m.tool_wear,
+                rotational_speed: m.rotational_speed,
+                torque: m.torque,
+                tool_wear: m.tool_wear,
               }),
             });
+
             if (!mlRes.ok) throw new Error(`ML sidecar ${mlRes.status}`);
+
             const ml = await mlRes.json();
-            return { machine_id: m.machine_id, ...ml };
-          } catch (err: any) {
-            // If ML sidecar is down, return the stored values unchanged
+
             return {
-              machine_id:     m.machine_id,
-              anomaly_score:  m.anomaly_score,
-              failure_vector: { TWF: m.TWF, HDF: m.HDF, PWF: m.PWF, OSF: m.OSF, RNF: m.RNF },
-              active_faults:  [],
+              machine_id: m.machine_id,
+              ...ml,
+            };
+          } catch (err: any) {
+            return {
+              machine_id: m.machine_id,
+              anomaly_score: m.anomaly_score,
+              failure_vector: {
+                TWF: m.TWF,
+                HDF: m.HDF,
+                PWF: m.PWF,
+                OSF: m.OSF,
+                RNF: m.RNF,
+              },
+              active_faults: [],
               decision: (() => {
                 const faults = [m.TWF, m.HDF, m.PWF, m.OSF, m.RNF];
-                if (faults.some((v) => v === 1)) return 'FAILURE';
-                if (m.anomaly_score > 0.6) return 'WARNING';
-                return 'NORMAL';
+
+                if (faults.some((v) => v === 1)) return "FAILURE";
+                if (m.anomaly_score > 0.6) return "WARNING";
+
+                return "NORMAL";
               })(),
             };
           }
@@ -439,21 +524,52 @@ async function startServer() {
       res.json({ results });
     } catch (err: any) {
       console.error("[/api/predict-all]", err?.message);
-      res.status(500).json({ error: "predict-all failed", detail: err?.message });
+      res.status(500).json({
+        error: "predict-all failed",
+        detail: err?.message,
+      });
     }
   });
-  
-  app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true });
+  });
 
   const staticPath = path.resolve(__dirname, "..", "dist");
+
   app.use(express.static(staticPath));
-  app.use((_req, res) => res.sendFile(path.join(staticPath, "index.html")));
+
+  app.use((_req, res) => {
+    res.sendFile(path.join(staticPath, "index.html"));
+  });
+
+  return app;
+}
+
+const app = createApp();
+
+async function startServer() {
+  const server = createServer(app);
 
   const port = Number(process.env.PORT) || 3001;
+
   server.listen(port, "0.0.0.0", () => {
     console.log(`SentinelOps orchestrator on :${port} (${LLM_MODEL})`);
     console.log(`ML sidecar expected at: ${ML_URL}`);
   });
 }
 
-startServer().catch((e) => { console.error(e); process.exit(1); });
+// Localhost / non-Vercel runtime:
+// - runs as a normal Express server
+//
+// Vercel runtime:
+// - DOES NOT call listen()
+// - exports the Express app as the serverless handler
+if (!process.env.VERCEL) {
+  startServer().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
+
+export default app;

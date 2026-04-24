@@ -9,21 +9,37 @@ from pydantic import BaseModel
 app = FastAPI()
 
 # ── Load models once at startup ──────────────────────────────────────────────
-# Resolves to Penguin/model_train/ regardless of where you run this script from
-BASE      = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE, "../../model_train")
+# Vercel will import this file and look for the FastAPI instance named `app`.
+# Locally, this still works with: python your_file.py
 
-scaler       = joblib.load(os.path.join(MODEL_DIR, "scaler.joblib"))
-lof          = joblib.load(os.path.join(MODEL_DIR, "lof_model.joblib"))
-rf_models    = joblib.load(os.path.join(MODEL_DIR, "rf_models.joblib"))   # dict: TWF/HDF/PWF/OSF/RNF
+BASE = os.path.dirname(os.path.abspath(__file__))
+
+# Works if this file is in something like:
+#   api/ml_server.py
+# and model_train is at repo root:
+#   model_train/scaler.joblib
+#
+# If your structure is different, adjust this path.
+MODEL_DIR = os.path.abspath(os.path.join(BASE, "..", "model_train"))
+
+if not os.path.exists(MODEL_DIR):
+    # Fallback for your original local structure:
+    # server/api/ml_server.py -> ../../model_train
+    MODEL_DIR = os.path.abspath(os.path.join(BASE, "../../model_train"))
+
+scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.joblib"))
+lof = joblib.load(os.path.join(MODEL_DIR, "lof_model.joblib"))
+rf_models = joblib.load(os.path.join(MODEL_DIR, "rf_models.joblib"))
 feature_cols = joblib.load(os.path.join(MODEL_DIR, "feature_cols.joblib"))
 
-print("✅ Models loaded:", list(rf_models.keys()))
+print("Models loaded:", list(rf_models.keys()))
 
-# ── Helpers (copied directly from your notebook) ─────────────────────────────
+
+# ── Helpers ─────────────────────────────────────────────────────────────────
 def get_anomaly_score(model, X):
     raw = model.decision_function(X)
-    return 1 / (1 + np.exp(-raw))   # sigmoid normalisation
+    return 1 / (1 + np.exp(-raw))
+
 
 def final_decision(anomaly_score: float, failure_vector: list) -> str:
     if anomaly_score > 0.7:
@@ -33,50 +49,59 @@ def final_decision(anomaly_score: float, failure_vector: list) -> str:
     else:
         return "NORMAL"
 
-# ── Request schema ────────────────────────────────────────────────────────────
-class MachineInput(BaseModel):
-    air_temperature: float       # Air temperature [K]
-    process_temperature: float   # Process temperature [K]
-    rotational_speed: float      # Rotational speed [rpm]
-    torque: float                # Torque [Nm]
-    tool_wear: float             # Tool wear [min]
 
-# ── /predict  ─────────────────────────────────────────────────────────────────
+# ── Request schema ──────────────────────────────────────────────────────────
+class MachineInput(BaseModel):
+    air_temperature: float
+    process_temperature: float
+    rotational_speed: float
+    torque: float
+    tool_wear: float
+
+
+# ── /predict ────────────────────────────────────────────────────────────────
 @app.post("/predict")
 def predict(m: MachineInput):
-    # Build DataFrame with the exact column names the scaler expects
-    X = pd.DataFrame([{
-        "Air temperature [K]":     m.air_temperature,
-        "Process temperature [K]": m.process_temperature,
-        "Rotational speed [rpm]":  m.rotational_speed,
-        "Torque [Nm]":             m.torque,
-        "Tool wear [min]":         m.tool_wear,
-    }])[feature_cols]   # reorder to match training order
+    X = pd.DataFrame(
+        [
+            {
+                "Air temperature [K]": m.air_temperature,
+                "Process temperature [K]": m.process_temperature,
+                "Rotational speed [rpm]": m.rotational_speed,
+                "Torque [Nm]": m.torque,
+                "Tool wear [min]": m.tool_wear,
+            }
+        ]
+    )[feature_cols]
 
     X_scaled = scaler.transform(X)
 
-    # ── Stage 1: LOF anomaly score ────────────────────────────────────────
     anomaly_score = float(get_anomaly_score(lof, X_scaled)[0])
 
-    # ── Stage 2: RF fault classifiers ────────────────────────────────────
     targets = ["TWF", "HDF", "PWF", "OSF", "RNF"]
     failure_vector = [int(rf_models[t].predict(X_scaled)[0]) for t in targets]
-    fault_dict     = dict(zip(targets, failure_vector))
-    active_faults  = [t for t, v in fault_dict.items() if v == 1]
 
-    # ── Stage 3: final decision (your notebook logic) ─────────────────────
+    fault_dict = dict(zip(targets, failure_vector))
+    active_faults = [t for t, v in fault_dict.items() if v == 1]
+
     decision = final_decision(anomaly_score, failure_vector)
 
     return {
-        "anomaly_score":  anomaly_score,
-        "failure_vector": fault_dict,        # { TWF: 0, HDF: 1, ... }
-        "active_faults":  active_faults,     # ["HDF"]
-        "decision":       decision,          # "NORMAL" | "WARNING" | "FAILURE"
+        "anomaly_score": anomaly_score,
+        "failure_vector": fault_dict,
+        "active_faults": active_faults,
+        "decision": decision,
     }
+
 
 @app.get("/health")
 def health():
     return {"ok": True}
 
+
+# ── Local-only runner ───────────────────────────────────────────────────────
+# Vercel imports `app` directly.
+# Do not run uvicorn on Vercel.
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5001)
+    port = int(os.environ.get("PORT", 5001))
+    uvicorn.run(app, host="0.0.0.0", port=port)
