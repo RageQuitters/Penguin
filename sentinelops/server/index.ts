@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -314,6 +315,18 @@ Rules:
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
   app.use(express.json({ limit: "2mb" }));
 
   // --- /api/chat — conversational Q&A ------------------------------------
@@ -445,9 +458,9 @@ async function startServer() {
   
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-  const staticPath = path.resolve(__dirname, "..", "dist");
-  app.use(express.static(staticPath));
-  app.use((_req, res) => res.sendFile(path.join(staticPath, "index.html")));
+  // const staticPath = path.resolve(__dirname, "..", "dist");
+  // app.use(express.static(staticPath));
+  //app.use((_req, res) => res.sendFile(path.join(staticPath, "index.html")));
 
   const port = Number(process.env.PORT) || 3001;
   server.listen(port, "0.0.0.0", () => {

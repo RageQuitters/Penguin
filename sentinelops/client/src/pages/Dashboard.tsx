@@ -15,6 +15,7 @@ import AllMachinesAnalysisPanel from "@/components/AllMachinesAnalysis";
 import { getAllMachines, analyzeAllMachines } from "@/lib/fakeData";
 import type { Machine, AllMachinesAnalysis } from "@/lib/fakeData";
 import { updateMachineMLResults } from "@/lib/firebaseService";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 import logo from "@/public/logo.png";
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 
@@ -39,7 +40,7 @@ export default function Dashboard() {
 
       // Step 2: enrich with real ML scores from your joblib models
       try {
-        const res = await fetch("/api/predict-all", {
+        const res = await fetch(`${API_BASE}/api/predict-all`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ machines: data }),

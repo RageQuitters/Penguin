@@ -62,8 +62,10 @@ export interface OrchestratorResult {
   error?: string;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+
 async function post<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
