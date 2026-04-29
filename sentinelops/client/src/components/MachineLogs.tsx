@@ -29,7 +29,9 @@ function fmtFull(ts: string) {
 }
 
 const SCORE_COLOR = (score: number) =>
-  score > 0.7 ? '#ef4444' : score > 0.4 ? '#f59e0b' : '#22c55e';
+  score >= 0.6 ? '#f59e0b' : '#22c55e';
+
+const SCORE_LABEL = (score: number) => score >= 0.6 ? 'Warning' : 'Normal';
 
 export default function MachineLogs({ machine }: MachineLogsProps) {
   const [anomalyLogs, setAnomalyLogs] = useState<AnomalyLog[]>([]);
@@ -67,8 +69,9 @@ export default function MachineLogs({ machine }: MachineLogsProps) {
       <div className="bg-card border border-border rounded-lg p-3 shadow-xl text-xs space-y-1">
         <p className="font-bold text-sm">{fmtFull(d.timestamp)}</p>
         <p>Anomaly Score: <span className="font-bold" style={{ color: SCORE_COLOR(d.anomaly_score) }}>{d.anomaly_score.toFixed(3)}</span></p>
-        <p>Decision: <span className="font-semibold">{d.decision}</span></p>
+        <p>Classification: <span className="font-semibold">{SCORE_LABEL(d.anomaly_score)}</span></p>
         <p>Air Temp: {d.air_temperature} K</p>
+        <p>Process Temp: {d.process_temperature} K</p>
         <p>Rotational: {d.rotational_speed} rpm</p>
         <p>Torque: {d.torque} Nm</p>
         <p>Tool Wear: {d.tool_wear} min</p>
@@ -125,8 +128,7 @@ export default function MachineLogs({ machine }: MachineLogsProps) {
                   <XAxis dataKey="timeLabel" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                   <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} />
                   <Tooltip content={<CustomTooltip />} />
-                  <ReferenceLine y={0.7} stroke="#ef4444" strokeDasharray="4 2" label={{ value: 'FAILURE', fill: '#ef4444', fontSize: 9 }} />
-                  <ReferenceLine y={0.4} stroke="#f59e0b" strokeDasharray="4 2" label={{ value: 'WARNING', fill: '#f59e0b', fontSize: 9 }} />
+                  <ReferenceLine y={0.6} stroke="#f59e0b" strokeDasharray="4 2" label={{ value: 'WARNING (0.6)', fill: '#f59e0b', fontSize: 9 }} />
                   <Line
                     type="monotone"
                     dataKey="scoreVal"
@@ -150,7 +152,7 @@ export default function MachineLogs({ machine }: MachineLogsProps) {
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-muted/50">
                     <tr>
-                      {['Time', 'Score', 'Decision', 'Temp (K)', 'RPM', 'Torque', 'Wear'].map((h) => (
+                      {['Time', 'Score', 'Classification', 'Air Temp (K)', 'Proc Temp (K)', 'RPM', 'Torque', 'Wear'].map((h) => (
                         <th key={h} className="text-left px-3 py-1.5 font-semibold text-muted-foreground">{h}</th>
                       ))}
                     </tr>
@@ -161,9 +163,10 @@ export default function MachineLogs({ machine }: MachineLogsProps) {
                         <td className="px-3 py-1">{row.timeLabel}</td>
                         <td className="px-3 py-1 font-mono" style={{ color: SCORE_COLOR(row.anomaly_score) }}>{row.scoreVal}</td>
                         <td className="px-3 py-1">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.decision === 'FAILURE' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : row.decision === 'WARNING' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>{row.decision}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${row.anomaly_score >= 0.6 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>{SCORE_LABEL(row.anomaly_score)}</span>
                         </td>
                         <td className="px-3 py-1">{row.air_temperature}</td>
+                        <td className="px-3 py-1">{row.process_temperature ?? '—'}</td>
                         <td className="px-3 py-1">{row.rotational_speed}</td>
                         <td className="px-3 py-1">{row.torque}</td>
                         <td className="px-3 py-1">{row.tool_wear}</td>

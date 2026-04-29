@@ -78,11 +78,16 @@ export interface EngineerLog {
 }
 
 export const DEFAULT_MACHINES: Machine[] = [
-  { machine_id: 'U-01', machine_type: 'Universal', air_temperature: 298.1, process_temperature: 308.6, rotational_speed: 1551, torque: 42.8, tool_wear: 0, anomaly_score: 0.12, rul_hours: 142.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
+  // Machine 01 — Severe (PWF + TWF active faults). Fixed by Zachary — seeded in engineer logs.
+  { machine_id: 'U-01', machine_type: 'Universal', air_temperature: 312.4, process_temperature: 328.7, rotational_speed: 1840, torque: 88.6, tool_wear: 198, anomaly_score: 0.91, rul_hours: 8.2, HDF: 0, OSF: 0, PWF: 1, RNF: 0, TWF: 1, status: 'Critical' },
   { machine_id: 'U-02', machine_type: 'Universal', air_temperature: 298.2, process_temperature: 308.7, rotational_speed: 1408, torque: 46.3, tool_wear: 3, anomaly_score: 0.18, rul_hours: 138.5, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
-  { machine_id: 'U-03', machine_type: 'Universal', air_temperature: 298.1, process_temperature: 308.5, rotational_speed: 1498, torque: 49.4, tool_wear: 5, anomaly_score: 0.21, rul_hours: 135.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
+  // Machine 03 — Severe (HDF + OSF active faults)
+  { machine_id: 'U-03', machine_type: 'Universal', air_temperature: 315.9, process_temperature: 332.1, rotational_speed: 1920, torque: 94.2, tool_wear: 221, anomaly_score: 0.88, rul_hours: 12.5, HDF: 1, OSF: 1, PWF: 0, RNF: 0, TWF: 0, status: 'Critical' },
   { machine_id: 'U-04', machine_type: 'Universal', air_temperature: 298.3, process_temperature: 308.8, rotational_speed: 1489, torque: 51.1, tool_wear: 8, anomaly_score: 0.29, rul_hours: 130.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
   { machine_id: 'U-05', machine_type: 'Universal', air_temperature: 298.4, process_temperature: 309.0, rotational_speed: 1412, torque: 55.7, tool_wear: 14, anomaly_score: 0.44, rul_hours: 122.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
+  { machine_id: 'U-06', machine_type: 'Universal', air_temperature: 298.8, process_temperature: 309.3, rotational_speed: 1455, torque: 58.1, tool_wear: 19, anomaly_score: 0.51, rul_hours: 118.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
+  // Machine 07 — Severe (RNF + PWF active faults)
+  { machine_id: 'U-07', machine_type: 'Universal', air_temperature: 318.3, process_temperature: 335.6, rotational_speed: 1975, torque: 97.8, tool_wear: 235, anomaly_score: 0.93, rul_hours: 5.7, HDF: 0, OSF: 0, PWF: 1, RNF: 1, TWF: 0, status: 'Critical' },
   { machine_id: 'H-01', machine_type: 'High', air_temperature: 299.1, process_temperature: 309.8, rotational_speed: 1285, torque: 68.4, tool_wear: 28, anomaly_score: 0.58, rul_hours: 112.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Normal' },
   { machine_id: 'H-02', machine_type: 'High', air_temperature: 299.3, process_temperature: 310.1, rotational_speed: 1224, torque: 72.1, tool_wear: 33, anomaly_score: 0.65, rul_hours: 104.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Warning' },
   { machine_id: 'H-03', machine_type: 'High', air_temperature: 299.6, process_temperature: 310.4, rotational_speed: 1198, torque: 76.3, tool_wear: 39, anomaly_score: 0.71, rul_hours: 96.0, HDF: 0, OSF: 0, PWF: 0, RNF: 0, TWF: 0, status: 'Warning' },
@@ -275,7 +280,18 @@ export async function seedEngineerAndFaultLogs(machines: Machine[]): Promise<voi
     const faultTypes: Array<'HDF' | 'OSF' | 'PWF' | 'RNF' | 'TWF'> = ['HDF', 'OSF', 'PWF', 'RNF', 'TWF'];
     const outcomes: Array<'resolved' | 'partial' | 'escalated'> = ['resolved', 'resolved', 'partial', 'escalated'];
     const now = Date.now();
-    for (const machine of machines.slice(0, 6)) {
+
+    // Machine U-01: Zachary fixed it (resolved)
+    const u01FixTs = new Date(now - 2 * 3600 * 1000).toISOString();
+    await addDoc(collection(db, 'engineer_logs'), {
+      machine_id: 'U-01', engineer_name: 'Zachary Lim',
+      action: 'Replaced power module and worn tool bits; recalibrated speed controller — all fault indicators cleared',
+      timestamp: u01FixTs, fault_types: ['PWF', 'TWF'], outcome: 'resolved',
+    } as EngineerLog);
+    await addDoc(collection(db, 'fault_logs'), { machine_id: 'U-01', timestamp: u01FixTs, fault_type: 'PWF', resolved: true, resolved_by: 'Zachary Lim', resolved_at: u01FixTs, notes: 'Power module replaced. Machine back online.' } as FaultLog);
+    await addDoc(collection(db, 'fault_logs'), { machine_id: 'U-01', timestamp: u01FixTs, fault_type: 'TWF', resolved: true, resolved_by: 'Zachary Lim', resolved_at: u01FixTs, notes: 'Tool bits replaced.' } as FaultLog);
+
+    for (const machine of machines.filter(m => m.machine_id !== 'U-01').slice(0, 6)) {
       const visits = 2 + Math.floor(Math.random() * 3);
       for (let v = 0; v < visits; v++) {
         const hoursAgo = (visits - v) * 18 + Math.floor(Math.random() * 6);
@@ -290,5 +306,67 @@ export async function seedEngineerAndFaultLogs(machines: Machine[]): Promise<voi
     console.log('[Firebase] Seeded engineer & fault logs');
   } catch (err) {
     console.warn('[Firebase] seedEngineerAndFaultLogs failed:', err);
+  }
+}
+
+// ─── Engineer Registry ────────────────────────────────────────────────────────
+
+export interface Engineer {
+  id?: string;
+  name: string;
+  role: string;
+  telegram_chat_id?: string;
+  phone?: string;
+  specialization: string;
+  active: boolean;
+  added_at: string;
+}
+
+const DEFAULT_ENGINEERS: Engineer[] = [
+  { name: 'Zachary Lim', role: 'Senior Maintenance Engineer', telegram_chat_id: '', phone: '+65 9123 4567', specialization: 'Power systems, tool wear', active: true, added_at: new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString() },
+  { name: 'Alice Tan', role: 'Maintenance Engineer', telegram_chat_id: '', phone: '+65 9234 5678', specialization: 'Hydraulics, bearings', active: true, added_at: new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString() },
+  { name: 'Bob Chen', role: 'Maintenance Technician', telegram_chat_id: '', phone: '+65 9345 6789', specialization: 'Sensor calibration', active: true, added_at: new Date(Date.now() - 45 * 24 * 3600 * 1000).toISOString() },
+  { name: 'Carlos Rivera', role: 'Field Engineer', telegram_chat_id: '', phone: '+65 9456 7890', specialization: 'Rotational systems', active: true, added_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString() },
+  { name: 'Diana Lee', role: 'Maintenance Engineer', telegram_chat_id: '', phone: '+65 9567 8901', specialization: 'Preventive maintenance', active: false, added_at: new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString() },
+];
+
+export async function seedEngineers(): Promise<void> {
+  try {
+    const existing = await getDocs(query(collection(db, 'engineers'), limit(1)));
+    if (!existing.empty) return;
+    for (const eng of DEFAULT_ENGINEERS) {
+      await addDoc(collection(db, 'engineers'), eng);
+    }
+    console.log('[Firebase] Seeded engineers registry');
+  } catch (err) {
+    console.warn('[Firebase] seedEngineers failed:', err);
+  }
+}
+
+export async function getEngineers(): Promise<Engineer[]> {
+  try {
+    const snap = await getDocs(query(collection(db, 'engineers'), orderBy('added_at', 'asc')));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as Engineer));
+  } catch (err) {
+    console.warn('[Firebase] getEngineers failed:', err);
+    return DEFAULT_ENGINEERS.map((e, i) => ({ ...e, id: `default-${i}` }));
+  }
+}
+
+export async function addEngineer(engineer: Omit<Engineer, 'id'>): Promise<string> {
+  try {
+    const ref = await addDoc(collection(db, 'engineers'), engineer);
+    return ref.id;
+  } catch (err) {
+    console.warn('[Firebase] addEngineer failed:', err);
+    return '';
+  }
+}
+
+export async function updateEngineer(id: string, updates: Partial<Engineer>): Promise<void> {
+  try {
+    await updateDoc(doc(db, 'engineers', id), updates);
+  } catch (err) {
+    console.warn('[Firebase] updateEngineer failed:', err);
   }
 }

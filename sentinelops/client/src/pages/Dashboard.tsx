@@ -11,7 +11,9 @@ import {
   ChevronRight,
   ClipboardList,
   Send,
+  Users,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import AIChat from "@/components/AIChat";
 import AllMachinesAnalysisPanel from "@/components/AllMachinesAnalysis";
 import MachineLogs from "@/components/MachineLogs";
@@ -22,6 +24,7 @@ import {
   seedRollingData,
   seedEngineerAndFaultLogs,
   addAnomalyLog,
+  seedEngineers,
 } from "@/lib/firebaseService";
 import logo from "@/public/logo.png";
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
@@ -42,6 +45,7 @@ export default function Dashboard() {
   const [carouselStart, setCarouselStart] = useState(0);
   const [detailTab, setDetailTab] = useState<DetailTab>("sensors");
   const [sendingTelegram, setSendingTelegram] = useState(false);
+  const [, navigate] = useLocation();
   const rollingTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load machines on mount
@@ -91,6 +95,7 @@ export default function Dashboard() {
       // Seed rolling & engineer data if empty (runs only once per fresh DB)
       seedRollingData(data).catch(() => {});
       seedEngineerAndFaultLogs(data).catch(() => {});
+      seedEngineers().catch(() => {});
 
       // Start client-side rolling ticker (every 10 min, writes a new anomaly log)
       rollingTickerRef.current = setInterval(async () => {
@@ -226,6 +231,13 @@ export default function Dashboard() {
             SentinelOps
           </h1>
           <p className="text-xs text-muted-foreground mt-1">Fleet Monitoring</p>
+          <button
+            onClick={() => navigate('/engineers')}
+            className="mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Manage Engineers
+          </button>
         </div>
 
         <div className="flex-1 flex flex-col overflow-hidden">
