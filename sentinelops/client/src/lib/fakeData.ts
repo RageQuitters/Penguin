@@ -3,7 +3,8 @@
  * Uses Firebase Firestore for persistence, with fallback to defaults
  */
 
-import { getAllMachines as getFirestoreMachines, initializeMachinesData, simulateFault as firebaseSimulateFault, Machine } from './firebaseService';
+import { getAllMachines as getFirestoreMachines, initializeMachinesData, simulateFault as firebaseSimulateFault } from './firebaseService';
+import type { Machine } from './firebaseService';
 
 export type { Machine };
 

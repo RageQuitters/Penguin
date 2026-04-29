@@ -1,15 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, ChevronDown, ChevronRight, Brain } from 'lucide-react';
-import { chat, type ChatHistoryItem } from '@/lib/api';
-import type { Machine } from '@/lib/firebaseService';
-import { Streamdown } from 'streamdown';
+import { useState, useRef, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Send, Loader2, ChevronDown, ChevronRight, Brain } from "lucide-react";
+import { chat, type ChatHistoryItem } from "@/lib/api";
+import type { Machine } from "@/lib/firebaseService";
+import { Streamdown } from "streamdown";
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   reasoning?: string | null; // only on assistant messages
   timestamp: Date;
@@ -25,41 +25,68 @@ interface AIChatProps {
 // Edit this list to change the suggested questions — no backend changes needed.
 const QUICK_PROMPTS: { label: string; prompt: string }[] = [
   {
-    label: '📋 Handover report',
+    label: "📲 Text engineers about machines",
     prompt:
-      'Generate a concise handover report for the current fleet. Include a status summary (counts), list critical machines with anomaly score, RUL and active faults, list warning machines the same way, and end with 3 prioritized recommended actions.',
+      "Text the engineers about the current machine status — include all severe and warning machines.",
   },
   {
-    label: '📍 Where to send mechanics?',
+    label: "📄 Generate handover report",
     prompt:
-      'Where should I send my mechanics? Organize your answer into three priority tiers: Priority 1 (critical — immediate), Priority 2 (warning with RUL < 100h — within 24h), Priority 3 (warning with RUL ≥ 100h — within 48h). For each machine give machine_id, RUL, active faults, and the action.',
+      "Generate a concise handover report for the current fleet. Include a status summary (counts), list critical machines with anomaly score, RUL and active faults, list warning machines the same way, and end with 3 prioritized recommended actions.",
   },
   {
-    label: '🔧 Orchestrate fleet decisions',
+    label: "📍 Where to send mechanics?",
     prompt:
-      'Act as the orchestrator. For every machine that is Warning or Critical, combine its anomaly score, active faults (HDF/OSF/PWF/RNF/TWF) and RUL to produce a final urgency level (low/medium/high/critical) and a 2–5 sentence work order. Return the results as a markdown table.',
+      "Where should I send my mechanics? Organize your answer into three priority tiers: Priority 1 (critical — immediate), Priority 2 (warning with RUL < 100h — within 24h), Priority 3 (warning with RUL ≥ 100h — within 48h). For each machine give machine_id, RUL, active faults, and the action.",
+  },
+  {
+    label: "🔧 Orchestrate fleet decisions",
+    prompt:
+      "Act as the orchestrator. For every machine that is Warning or Critical, combine its anomaly score, active faults (HDF/OSF/PWF/RNF/TWF) and RUL to produce a final urgency level (low/medium/high/critical) and a 2–5 sentence work order. Return the results as a markdown table.",
   },
 ];
+
+const TELEGRAM_KEYWORDS = [
+  "text engineer",
+  "text the engineer",
+  "notify engineer",
+  "alert engineer",
+  "send telegram",
+  "message engineer",
+  "ping engineer",
+  "contact engineer",
+  "whatsapp engineer",
+  "sms engineer",
+  "inform engineer",
+  "dispatch engineer",
+  "telegram engineer",
+  "tell engineer",
+];
+
+function isTelegramRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return TELEGRAM_KEYWORDS.some((kw) => lower.includes(kw));
+}
 
 export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: '0',
-      role: 'assistant',
+      id: "0",
+      role: "assistant",
       content:
         "Hello! I'm the SentinelOps AI Assistant. Ask me anything about your fleet, or tap one of the suggested questions below.",
       timestamp: new Date(),
     },
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const toggleReasoning = (id: string) => {
@@ -83,18 +110,77 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
 
     const userMessage: ChatMessage = {
       id: `u-${Date.now()}`,
-      role: 'user',
+      role: "user",
       content: text,
       timestamp: new Date(),
     };
 
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+
+    // If the user is asking to text/notify engineers, route to Telegram
+    if (isTelegramRequest(text)) {
+      setLoading(true);
+      try {
+        const hasFault = (m: (typeof machines)[0]) =>
+          [m.HDF, m.OSF, m.PWF, m.RNF, m.TWF].some((v) => v === 1);
+        const severe = machines.filter(hasFault);
+        const warning = machines.filter(
+          (m) => !hasFault(m) && m.anomaly_score >= 0.6,
+        );
+        const machineLines =
+          [
+            ...severe.map(
+              (m) =>
+                `🚨 *${m.machine_id}* (SEVERE) — anomaly ${m.anomaly_score.toFixed(2)}, RUL ${m.rul_hours.toFixed(0)}h`,
+            ),
+            ...warning.map(
+              (m) =>
+                `⚠️ *${m.machine_id}* (WARNING) — anomaly ${m.anomaly_score.toFixed(2)}, RUL ${m.rul_hours.toFixed(0)}h`,
+            ),
+          ].join("\n") || "✅ All machines are within normal parameters.";
+        const telegramMessage = `📡 *SentinelOps Alert*\n\n${machineLines}\n\n_Sent from SentinelOps AI Chat — ${new Date().toLocaleTimeString()}_`;
+        const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL ?? "";
+        const res = await fetch(`${API_BASE}/api/telegram/notify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: telegramMessage }),
+        });
+        const sent = res.ok;
+        const reply = sent
+          ? `✅ **Telegram notification sent to all engineers!**\n\nMessage dispatched:\n${telegramMessage.replace(/\*/g, "**")}`
+          : `⚠️ **Telegram service unavailable.** Check that \`TELEGRAM_BOT_TOKEN\` and \`TELEGRAM_ENGINEER_CHAT_IDS\` are configured on the server.\n\nMessage that would have been sent:\n${telegramMessage.replace(/\*/g, "**")}`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: reply,
+            timestamp: new Date(),
+          },
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `e-${Date.now()}`,
+            role: "assistant",
+            content:
+              "⚠️ Could not reach the Telegram service. Ensure the server is running and configured.",
+            timestamp: new Date(),
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Build history from current messages (exclude reasoning when forwarding).
     const history: ChatHistoryItem[] = messages
-      .filter((m) => m.id !== '0') // skip the greeting
+      .filter((m) => m.id !== "0") // skip the greeting
       .map((m) => ({ role: m.role, content: m.content }));
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
     setLoading(true);
 
     try {
@@ -102,8 +188,8 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
 
       const assistantMessage: ChatMessage = {
         id: `a-${Date.now()}`,
-        role: 'assistant',
-        content: reply || '(empty response)',
+        role: "assistant",
+        content: reply || "(empty response)",
         reasoning: reasoning || null,
         timestamp: new Date(),
       };
@@ -115,9 +201,9 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
         ...prev,
         {
           id: `e-${Date.now()}`,
-          role: 'assistant',
+          role: "assistant",
           content:
-            'Sorry, I could not reach the AI service. Check the server logs and DEEPSEEK_API_KEY.',
+            "Sorry, I could not reach the AI service. Check the server logs and DEEPSEEK_API_KEY.",
           timestamp: new Date(),
         },
       ]);
@@ -127,32 +213,34 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendPrompt(input);
     }
   };
 
   function formatMessage(text: string): string {
-    return text
-      // Add spacing before sections
-      .replace(/\n(?=[A-Z][a-z]+:)/g, '\n')
+    return (
+      text
+        // Add spacing before sections
+        .replace(/\n(?=[A-Z][a-z]+:)/g, "\n")
 
-      // Space out bullet lists
-      .replace(/•/g, '\n•')
+        // Space out bullet lists
+        .replace(/•/g, "\n•")
 
-      // Add spacing before numbered lists
-      .replace(/(\d+\.)/g, '\n$1')
+        // Add spacing before numbered lists
+        .replace(/(\d+\.)/g, "\n$1")
 
-      // Add spacing before ALL CAPS headers
-      .replace(/\n([A-Z\s]{6,})\n/g, '\n**$1**\n')
+        // Add spacing before ALL CAPS headers
+        .replace(/\n([A-Z\s]{6,})\n/g, "\n**$1**\n")
 
-      // Compress excessive newlines
-      .replace(/\n{3,}/g, '\n')
+        // Compress excessive newlines
+        .replace(/\n{3,}/g, "\n")
 
-      .trim();
+        .trim()
+    );
   }
-  
+
   return (
     <div className="flex flex-col h-full bg-background border-l border-border overflow-hidden">
       {/* Header */}
@@ -170,19 +258,19 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
             <div
               key={msg.id}
               className={`flex ${
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
+                msg.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
               <div
                 className={`max-w-[85%] px-3 py-2 rounded-lg text-sm ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 dark:bg-blue-500 text-white'
-                    : 'bg-slate-700 dark:bg-slate-600 text-slate-100 dark:text-slate-200'
+                  msg.role === "user"
+                    ? "bg-blue-600 dark:bg-blue-500 text-white"
+                    : "bg-slate-700 dark:bg-slate-600 text-slate-100 dark:text-slate-200"
                 }`}
               >
                 {/* Thinking toggle — only shown on assistant messages that
                     actually have reasoning content. Collapsed by default. */}
-                {msg.role === 'assistant' && msg.reasoning && (
+                {msg.role === "assistant" && msg.reasoning && (
                   <div className="mb-2">
                     <button
                       onClick={() => toggleReasoning(msg.id)}
@@ -196,8 +284,8 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
                       <Brain className="h-3 w-3" />
                       <span>
                         {expandedReasoning.has(msg.id)
-                          ? 'Hide thinking'
-                          : 'Show thinking'}
+                          ? "Hide thinking"
+                          : "Show thinking"}
                       </span>
                     </button>
                     {expandedReasoning.has(msg.id) && (
@@ -208,8 +296,10 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
                   </div>
                 )}
 
-                {msg.role === 'user' ? (
-                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                {msg.role === "user" ? (
+                  <div className="whitespace-pre-wrap break-words">
+                    {msg.content}
+                  </div>
                 ) : (
                   <div
                     className="
@@ -239,8 +329,8 @@ export default function AIChat({ machines, onAnalyzeAll }: AIChatProps) {
                 )}
                 <div className="text-xs opacity-70 mt-1">
                   {msg.timestamp.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
+                    hour: "2-digit",
+                    minute: "2-digit",
                   })}
                 </div>
               </div>
