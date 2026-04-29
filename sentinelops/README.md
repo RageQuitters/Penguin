@@ -1,168 +1,114 @@
-# SentinelOps Dashboard
+# SentinelOps — Enhanced Edition
 
-A modern machine fleet monitoring dashboard with AI-powered analysis and real-time status tracking.
+Industrial machine-fleet monitoring with ML anomaly detection, AI orchestration, Telegram notifications, and rolling data simulation.
 
-## Features
+## New Features (this edition)
 
-- **Fleet Monitoring**: Real-time status tracking for 12 machines with color-coded health indicators
-- **AI Chat Assistant**: Interactive chat interface for querying fleet status and getting recommendations
-- **Comprehensive Analysis**: "Analyze All Machines" feature that generates fleet-wide summaries with engineer dispatch recommendations
-- **Machine Details**: Detailed sensor readings, health metrics, and remaining useful life (RUL) tracking
-- **Status Dashboard**: Quick overview of Normal, Warning, and Critical machines
+### 📋 Machine Logs
+- **Anomaly History** — Line graph of anomaly scores over time (10-min intervals), plus raw reading table
+- **Fault Log** — Past fault events with resolution status and engineer notes
+- **Engineer Fixes** — History of engineer visits, actions taken, and outcomes
 
-## Tech Stack
+### 🤖 Telegram AI Agent
+- Autonomously **notifies engineers** when machines become critical or high urgency
+- Notifies on: manual "Notify Engineers" button, "Analyze All Machines" (for critical dispatch), orchestrate calls
+- Engineers can **text the bot** and get AI-powered answers about machine status, anomalies, and faults
+- Bot commands: "status", "severe", any natural-language question
 
-- **Frontend**: React 19 + TypeScript
-- **UI Components**: Radix UI + shadcn/ui
-- **Styling**: Tailwind CSS 4
-- **Build Tool**: Vite
-- **Routing**: Wouter
-- **Charts**: Recharts
+### 🔄 Rolling Fake Database
+- Seeds 12 historical readings per machine (2h of 10-min intervals) if Firestore is empty
+- A ticker adds a new anomaly log every 10 minutes with realistic sensor drift
+- Seeds fake engineer visit logs and fault logs for demo purposes
 
-## Getting Started
+---
 
-### Prerequisites
+## Setup
 
-- Node.js 18+ 
-- pnpm (recommended) or npm
+### 1. Environment variables
 
-### Installation
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
 
-1. Extract the ZIP file
-2. Install dependencies:
+Fill in:
+```env
+LLM_API_KEY=your_deepseek_key
+TELEGRAM_BOT_TOKEN=your_bot_token    # from @BotFather on Telegram
+TELEGRAM_ENGINEER_CHAT_IDS=12345,67890  # comma-separated chat IDs
+```
+
+**Getting a Telegram Bot:**
+1. Message `@BotFather` on Telegram → `/newbot`
+2. Copy the token into `TELEGRAM_BOT_TOKEN`
+3. Message `@userinfobot` to find your chat ID → add to `TELEGRAM_ENGINEER_CHAT_IDS`
+
+### 2. Install dependencies
 
 ```bash
-pnpm install
-# or
 npm install
 ```
 
-### Development
-
-Start the development server:
+### 3. Start the Python ML sidecar
 
 ```bash
-pnpm dev
-# or
+cd ../  # repo root
+pip install fastapi uvicorn joblib scikit-learn pandas numpy
+python sentinelops/server/ml_server.py
+```
+
+### 4. Start the Node.js server + frontend
+
+```bash
+# Terminal 1: frontend
 npm run dev
+
+# Terminal 2: backend  
+PORT=3001 npm run dev:server
 ```
 
-The application will be available at `http://localhost:3000`
+---
 
-### Build
-
-Create a production build:
-
-```bash
-pnpm build
-# or
-npm run build
-```
-
-## Project Structure
+## Architecture
 
 ```
-sentinelops/
-├── client/
-│   ├── public/           # Static assets
-│   ├── src/
-│   │   ├── components/   # Reusable React components
-│   │   ├── contexts/     # React contexts
-│   │   ├── hooks/        # Custom React hooks
-│   │   ├── lib/          # Utility functions and fake data
-│   │   ├── pages/        # Page components
-│   │   ├── App.tsx       # Main app component
-│   │   ├── main.tsx      # React entry point
-│   │   └── index.css     # Global styles
-│   └── index.html        # HTML template
-├── server/               # Backend placeholder (not used in this version)
-├── shared/               # Shared types and constants
-├── package.json
-├── vite.config.ts
-└── tsconfig.json
+Browser (React + Firebase)
+  └─ Dashboard
+       ├─ Machine Carousel (sidebar)
+       ├─ Machine Detail Tabs: Sensors | Faults | Health | Logs
+       │    └─ MachineLogs (anomaly chart, fault log, engineer log)
+       └─ AI Chat
+
+Node.js Express Server (:3001)
+  ├─ /api/chat           — conversational LLM
+  ├─ /api/orchestrate    — single machine (LOF + RF + DeepSeek)
+  ├─ /api/orchestrate/fleet — all machines (auto-notifies Telegram)
+  ├─ /api/predict-all    — ML batch scoring on page load
+  ├─ /api/rolling-tick   — advances rolling DB (also runs on 10-min timer)
+  └─ /api/telegram/notify — broadcast message to engineers
+  
+  Telegram Bot (long-polling)
+  └─ Listens for engineer messages → AI reply
+  └─ Sends alerts on orchestration
+
+Python FastAPI (:5001)
+  └─ /predict            — LOF anomaly score + RF fault classifiers (joblib)
+
+Firebase Firestore
+  ├─ machines/           — machine state
+  ├─ anomaly_logs/       — 10-min rolling readings
+  ├─ fault_logs/         — fault events
+  └─ engineer_logs/      — engineer visit history
 ```
 
-## Key Components
+---
 
-### Dashboard (`client/src/pages/Dashboard.tsx`)
-Main application page with three-panel layout:
-- Left sidebar: Machine list with status indicators
-- Center: Machine details and analysis results
-- Right sidebar: AI chat assistant
+## Firestore Indexes Required
 
-### AIChat (`client/src/components/AIChat.tsx`)
-Interactive chat interface that responds to queries about:
-- Machine status
-- Critical alerts
-- Recommendations
-- Analysis requests
+For the anomaly_logs and fault_logs queries you'll need composite indexes.
+Firebase will print a direct link to create them on first query — just click the link.
 
-### AllMachinesAnalysis (`client/src/components/AllMachinesAnalysis.tsx`)
-Comprehensive fleet analysis panel showing:
-- Fleet status summary
-- Engineers to dispatch
-- Recommended actions
-- Machine breakdown by status
-
-### Fake Data (`client/src/lib/fakeData.ts`)
-Provides:
-- 12 pre-seeded machines with realistic sensor data
-- Analysis functions
-- AI chat response generation
-
-## Usage
-
-### Viewing Machine Status
-1. Select a machine from the left sidebar
-2. View detailed sensor readings and health metrics in the center panel
-3. Check the RUL (Remaining Useful Life) progress bar
-
-### Analyzing All Machines
-1. Click the "Analyze All Machines" button in the top-right
-2. Wait for the analysis to complete (simulated 1.5s delay)
-3. Review the comprehensive fleet report with:
-   - Status breakdown (Normal/Warning/Critical)
-   - Engineers to dispatch with urgency levels
-   - Recommended maintenance actions
-   - Detailed machine information by status
-
-### Chatting with AI Assistant
-1. Type a question in the chat input box on the right
-2. Ask about:
-   - `"status"` - Get current fleet status
-   - `"critical"` - See critical machines
-   - `"recommend"` - Get maintenance recommendations
-   - `"analyze"` - Instructions for fleet analysis
-3. The AI responds with relevant information
-
-## Customization
-
-### Adding More Machines
-Edit `client/src/lib/fakeData.ts` and add entries to the `SEED_MACHINES` array.
-
-### Modifying Machine Data
-Update the sensor values and status in the `SEED_MACHINES` array to reflect your test scenarios.
-
-### Customizing AI Responses
-Edit the `generateAIChatResponse` function in `client/src/lib/fakeData.ts` to add new patterns or responses.
-
-### Styling
-- Global styles: `client/src/index.css`
-- Component styles: Use Tailwind CSS classes
-- Theme colors: Defined in CSS variables in `index.css`
-
-## Building for Production
-
-```bash
-pnpm build
-```
-
-This creates an optimized build in the `dist/` directory ready for deployment.
-
-## License
-
-MIT
-
-## Support
-
-For issues or questions, refer to the component documentation in the source files.
+Fields needed:
+- `anomaly_logs`: `machine_id` ASC + `timestamp` DESC
+- `fault_logs`: `machine_id` ASC + `timestamp` DESC  
+- `engineer_logs`: `machine_id` ASC + `timestamp` DESC
