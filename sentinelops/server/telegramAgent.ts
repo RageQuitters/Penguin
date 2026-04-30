@@ -260,12 +260,21 @@ async function handleCallbackQuery(query: any) {
 
     case 'esc': {
       // Don't emit event yet — wait for engineer's reason text.
-      ackText = '🚨 Escalation noted — please reply with a reason';
       const askChatId = Number(pending.engineer_chat_id);
-      if (!isNaN(askChatId)) {
-        _pendingEscalations.set(askChatId, { assignment_id: assignmentId, asked_at: Date.now() });
+      if (isNaN(askChatId)) {
+        // Can't register the pending escalation — engineer_chat_id is not a valid number.
+        // Fall back to recording the escalation immediately without a reason.
+        console.warn(
+          `[Telegram] esc: engineer_chat_id "${pending.engineer_chat_id}" is not a valid number — recording escalation immediately`,
+        );
+        recordEvent(pending, 'escalated', '(no reason — chat ID invalid)');
+        _pendingAssignments.delete(assignmentId);
+        await answerCallbackQuery(callbackId, '🚨 Escalated (no reason collected)');
+        return;
       }
-      await answerCallbackQuery(callbackId, ackText);
+
+      _pendingEscalations.set(askChatId, { assignment_id: assignmentId, asked_at: Date.now() });
+      await answerCallbackQuery(callbackId, '🚨 Escalation noted — please reply with a reason');
       await sendMessage(
         pending.engineer_chat_id,
         [
