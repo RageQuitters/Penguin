@@ -25,16 +25,25 @@ import {
   seedEngineerAndFaultLogs,
   addAnomalyLog,
   seedEngineers,
+  detectAndLogNewFaults,
+  getEngineers,
+  type Engineer,
 } from "@/lib/firebaseService";
 import logo from "@/public/logo.png";
 import { PanelGroup, Panel, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
+import AssignEngineerDialog from "@/components/AssignEngineerDialog";
+import FleetFaultFeed from "@/components/FleetFaultFeed";
+import { UserPlus, ListChecks } from "lucide-react";
+import { startAssignmentSync } from "@/lib/assignmentSync";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const CAROUSEL_SIZE = 6;
 
 // Machine detail view tabs
 type DetailTab = "sensors" | "faults" | "health" | "logs";
+// Center view modes
+type CenterView = "machine" | "faultFeed";
 
 export default function Dashboard() {
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -47,6 +56,14 @@ export default function Dashboard() {
   const [sendingTelegram, setSendingTelegram] = useState(false);
   const [, navigate] = useLocation();
   const rollingTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Track 7+B additions
+  const [engineers, setEngineers] = useState<Engineer[]>([]);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [centerView, setCenterView] = useState<CenterView>("machine");
+  const [faultFeedRefresh, setFaultFeedRefresh] = useState(0);
+  // Snapshot of previous machine fault flags so we can diff and detect 0→1 transitions
+  const prevMachinesRef = useRef<Map<string, Machine>>(new Map());
 
   // Load machines on mount
   useEffect(() => {
@@ -74,9 +91,9 @@ export default function Dashboard() {
               TWF: ml.failure_vector.TWF ?? m.TWF,
               status: (() => {
                 const faults = [ml.failure_vector.HDF, ml.failure_vector.OSF, ml.failure_vector.PWF, ml.failure_vector.RNF, ml.failure_vector.TWF];
-                if (faults.some((v) => v === 1)) return "Severe";
-                if (ml.anomaly_score > 0.6) return "Moderate";
-                return "Normal";
+                if (faults.some((v) => v === 1)) return "Critical" as const;
+                if (ml.anomaly_score > 0.6) return "Warning" as const;
+                return "Normal" as const;
               })(),
             };
           });
@@ -89,6 +106,11 @@ export default function Dashboard() {
       }
 
       setMachines(data);
+      // Seed snapshot for diff-based fault detection
+      const snap = new Map<string, Machine>();
+      data.forEach((m) => snap.set(m.machine_id, m));
+      prevMachinesRef.current = snap;
+
       setSelectedMachineId(data[0]?.machine_id || null);
       setLoading(false);
 
@@ -96,6 +118,17 @@ export default function Dashboard() {
       seedRollingData(data).catch(() => {});
       seedEngineerAndFaultLogs(data).catch(() => {});
       seedEngineers().catch(() => {});
+
+      // Load engineer roster (used by AssignEngineerDialog and FleetFaultFeed)
+      getEngineers().then(setEngineers).catch(() => {});
+
+      // Initial fault detection — anything already faulted on first load gets a fresh log
+      // (detectAndLogNewFaults dedupes against existing unresolved logs, so it's safe)
+      data.forEach((m) => {
+        detectAndLogNewFaults(undefined, m).then((created) => {
+          if (created.length > 0) setFaultFeedRefresh((k) => k + 1);
+        }).catch(() => {});
+      });
 
       // Start client-side rolling ticker (every 10 min, writes a new anomaly log)
       rollingTickerRef.current = setInterval(async () => {
@@ -114,13 +147,45 @@ export default function Dashboard() {
             tool_wear: m.tool_wear,
             decision: score > 0.7 ? 'FAILURE' : score > 0.4 ? 'WARNING' : 'NORMAL',
           }).catch(() => {});
+
+          // Diff against previous snapshot for fault transitions
+          const prev = prevMachinesRef.current.get(m.machine_id);
+          const created = await detectAndLogNewFaults(prev, m);
+          if (created.length > 0) {
+            setFaultFeedRefresh((k) => k + 1);
+            toast.warning(
+              `🚨 ${m.machine_id}: new fault${created.length > 1 ? 's' : ''} ${created.join(', ')}`,
+              { duration: 6000 },
+            );
+          }
+          prevMachinesRef.current.set(m.machine_id, m);
         }
       }, 10 * 60 * 1000);
     };
     loadMachines();
 
+    // Track C: poll the server for engineer Telegram responses (button taps,
+    // "fixed U-03" text shortcuts) and mirror them into Firestore.
+    const stopSync = startAssignmentSync({
+      onChange: (events) => {
+        // Refresh fault feed whenever an engineer closes or escalates an assignment
+        setFaultFeedRefresh((k) => k + 1);
+        for (const ev of events) {
+          if (ev.kind === 'resolved') {
+            toast.success(`✅ ${ev.engineer_name} fixed ${ev.machine_id} via Telegram`);
+          } else if (ev.kind === 'escalated') {
+            toast.warning(
+              `🚨 ${ev.engineer_name} escalated ${ev.machine_id}${ev.note ? ` — ${ev.note}` : ''}`,
+              { duration: 8000 },
+            );
+          }
+        }
+      },
+    });
+
     return () => {
       if (rollingTickerRef.current) clearInterval(rollingTickerRef.current);
+      stopSync();
     };
   }, []);
 
@@ -303,26 +368,53 @@ export default function Dashboard() {
             <div className="flex-shrink-0 p-4 border-b border-border flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h2 className="text-xl font-bold">
-                  {selectedMachine ? selectedMachine.machine_id : "No Machine Selected"}
+                  {centerView === "faultFeed"
+                    ? "Live Fault Feed"
+                    : selectedMachine ? selectedMachine.machine_id : "No Machine Selected"}
                 </h2>
-                {selectedMachine && (
+                {centerView === "machine" && selectedMachine && (
                   <p className="text-sm text-muted-foreground mt-1">
                     Status: <span className="font-semibold">{getMachineColor(selectedMachine).label}</span>
                   </p>
                 )}
+                {centerView === "faultFeed" && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Auto-detected faults across the fleet — assign an engineer to each.
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                {selectedMachine && (
-                  <Button
-                    onClick={handleSendTelegramUpdate}
-                    disabled={sendingTelegram}
-                    size="sm"
-                    variant="outline"
-                    className="gap-1"
-                  >
-                    <Send className="h-4 w-4" />
-                    {sendingTelegram ? "Sending…" : "Notify Engineers"}
-                  </Button>
+                <Button
+                  onClick={() => setCenterView(centerView === "faultFeed" ? "machine" : "faultFeed")}
+                  size="sm"
+                  variant={centerView === "faultFeed" ? "default" : "outline"}
+                  className="gap-1"
+                >
+                  <ListChecks className="h-4 w-4" />
+                  {centerView === "faultFeed" ? "Show Machine" : "Fault Feed"}
+                </Button>
+                {centerView === "machine" && selectedMachine && (
+                  <>
+                    <Button
+                      onClick={() => setAssignDialogOpen(true)}
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 border-blue-500/40 text-blue-300 hover:bg-blue-500/10"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      Assign Engineer
+                    </Button>
+                    <Button
+                      onClick={handleSendTelegramUpdate}
+                      disabled={sendingTelegram}
+                      size="sm"
+                      variant="outline"
+                      className="gap-1"
+                    >
+                      <Send className="h-4 w-4" />
+                      {sendingTelegram ? "Sending…" : "Notify All"}
+                    </Button>
+                  </>
                 )}
                 <Button onClick={handleAnalyzeAll} disabled={analyzing} size="lg">
                   {analyzing ? "Analyzing…" : "Analyze All Machines"}
@@ -332,7 +424,13 @@ export default function Dashboard() {
 
             {/* Content */}
             <div className="flex-1 overflow-hidden">
-              {analysisResult ? (
+              {centerView === "faultFeed" ? (
+                <FleetFaultFeed
+                  machines={machines}
+                  engineers={engineers}
+                  refreshKey={faultFeedRefresh}
+                />
+              ) : analysisResult ? (
                 <ScrollArea className="h-full">
                   <AllMachinesAnalysisPanel analysis={analysisResult} loading={analyzing} />
                   {selectedMachine && (
@@ -381,6 +479,15 @@ export default function Dashboard() {
           </div>
         </Panel>
       </PanelGroup>
+
+      {/* Assignment dialog — opens from the "Assign Engineer" button in the header */}
+      <AssignEngineerDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        machine={selectedMachine ?? null}
+        engineers={engineers}
+        onAssigned={() => setFaultFeedRefresh((k) => k + 1)}
+      />
     </div>
   );
 }
