@@ -144,20 +144,20 @@ export default function MachineLogs({ machine }: MachineLogsProps) {
 
           {/* Raw table */}
           {chartData.length > 0 && (
-            <Card className="p-0 overflow-hidden">
-              <div className="px-4 py-2 border-b border-border bg-muted/30">
+            <Card className="p-0 overflow-hidden border border-border bg-black">
+              <ScrollArea className="h-90 overflow-y-auto">
+                <div className="px-4 py-2 border-b border-border bg-muted/30">
                 <p className="text-xs font-semibold text-muted-foreground">RAW READINGS</p>
               </div>
-              <ScrollArea className="h-40">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-muted/50">
+                <table className="w-full text-xs border-collapse border-spacing-0">
+                  <thead className="sticky top-0 bg-muted/90 z-10">
                     <tr>
                       {['Time', 'Score', 'Classification', 'Air Temp (K)', 'Proc Temp (K)', 'RPM', 'Torque', 'Wear'].map((h) => (
-                        <th key={h} className="text-left px-3 py-1.5 font-semibold text-muted-foreground">{h}</th>
+                        <th key={h} className="text-left px-2 py-1.5 font-semibold text-muted-foreground">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-border/40">
                     {[...chartData].reverse().map((row, i) => (
                       <tr key={i} className="border-t border-border/50 hover:bg-muted/20">
                         <td className="px-3 py-1">{row.timeLabel}</td>

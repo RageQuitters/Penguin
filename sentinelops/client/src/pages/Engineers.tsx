@@ -189,7 +189,7 @@ export default function Engineers() {
               <select
                 value={form.role}
                 onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                className="w-full h-9 rounded-md border border-input bg-black px-3 text-sm text-white appearance-none"
               >
                 {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -217,7 +217,7 @@ export default function Engineers() {
               <select
                 value={form.specialization}
                 onChange={e => setForm(f => ({ ...f, specialization: e.target.value }))}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm appearance-none"
               >
                 {SPECIALIZATIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>

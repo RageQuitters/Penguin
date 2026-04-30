@@ -370,3 +370,131 @@ export async function updateEngineer(id: string, updates: Partial<Engineer>): Pr
     console.warn('[Firebase] updateEngineer failed:', err);
   }
 }
+
+// ─── Assignments ──────────────────────────────────────────────────────────────
+// An Assignment is an open work item: machine X needs engineer Y to fix fault Z.
+// Status flow: assigned → in_progress → resolved (or escalated)
+
+export type AssignmentStatus = 'assigned' | 'in_progress' | 'resolved' | 'escalated';
+
+export interface Assignment {
+  id?: string;
+  machine_id: string;
+  engineer_id: string;
+  engineer_name: string;
+  engineer_telegram_chat_id?: string;
+  fault_types: string[];
+  status: AssignmentStatus;
+  created_at: string;
+  resolved_at?: string;
+  notes?: string;
+  /** Auto-routed by specialty matcher vs hand-picked from UI */
+  auto_assigned: boolean;
+}
+
+export async function addAssignment(a: Omit<Assignment, 'id'>): Promise<string> {
+  try {
+    const ref = await addDoc(collection(db, 'assignments'), a);
+    return ref.id;
+  } catch (err) {
+    console.warn('[Firebase] addAssignment failed:', err);
+    return '';
+  }
+}
+
+export async function updateAssignment(id: string, updates: Partial<Assignment>): Promise<void> {
+  try { await updateDoc(doc(db, 'assignments', id), updates); }
+  catch (err) { console.warn('[Firebase] updateAssignment failed:', err); }
+}
+
+export async function getOpenAssignments(): Promise<Assignment[]> {
+  try {
+    const q = query(
+      collection(db, 'assignments'),
+      where('status', 'in', ['assigned', 'in_progress']),
+      orderBy('created_at', 'desc'),
+      limit(50),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Assignment));
+  } catch (err) {
+    console.warn('[Firebase] getOpenAssignments failed:', err);
+    return [];
+  }
+}
+
+// ─── Live fault detection ─────────────────────────────────────────────────────
+// When the dashboard sees a 0→1 fault transition for a machine, we want to
+// write a FaultLog with resolved=false. Subsequent ticks where the fault
+// is still 1 should NOT create duplicate logs — we look up open faults first.
+
+const FAULT_KEYS = ['HDF', 'OSF', 'PWF', 'RNF', 'TWF'] as const;
+type FaultKey = typeof FAULT_KEYS[number];
+
+/**
+ * Compares previous and next snapshots of a single machine and writes a
+ * FaultLog for any fault that flipped 0→1, unless an unresolved log of
+ * the same (machine_id, fault_type) already exists.
+ *
+ * Returns the list of newly created fault types (so callers can react —
+ * e.g. open the assign-engineer dialog automatically for critical ones).
+ */
+export async function detectAndLogNewFaults(
+  prev: Machine | undefined,
+  next: Machine,
+): Promise<FaultKey[]> {
+  const newlyActive: FaultKey[] = [];
+  for (const k of FAULT_KEYS) {
+    const wasActive = prev ? prev[k] === 1 : false;
+    const isActive = next[k] === 1;
+    if (!wasActive && isActive) newlyActive.push(k);
+  }
+  if (newlyActive.length === 0) return [];
+
+  // Check for existing unresolved logs to avoid duplicates
+  const created: FaultKey[] = [];
+  for (const fault of newlyActive) {
+    try {
+      const q = query(
+        collection(db, 'fault_logs'),
+        where('machine_id', '==', next.machine_id),
+        where('fault_type', '==', fault),
+        where('resolved', '==', false),
+        limit(1),
+      );
+      const existing = await getDocs(q);
+      if (!existing.empty) continue;
+
+      await addDoc(collection(db, 'fault_logs'), {
+        machine_id: next.machine_id,
+        timestamp: new Date().toISOString(),
+        fault_type: fault,
+        resolved: false,
+      } as FaultLog);
+      created.push(fault);
+    } catch (err) {
+      console.warn('[Firebase] detectAndLogNewFaults failed for', fault, err);
+    }
+  }
+  if (created.length > 0) {
+    console.log(`[FaultLog] auto-logged for ${next.machine_id}:`, created.join(', '));
+  }
+  return created;
+}
+
+/** Fleet-wide unresolved fault feed for the new "All Faults" panel. */
+export async function getAllUnresolvedFaults(n = 50): Promise<FaultLog[]> {
+  try {
+    const q = query(
+      collection(db, 'fault_logs'),
+      where('resolved', '==', false),
+      orderBy('timestamp', 'desc'),
+      limit(n),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as FaultLog));
+  } catch (err) {
+    console.warn('[Firebase] getAllUnresolvedFaults failed:', err);
+    return [];
+  }
+}
